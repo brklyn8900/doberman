@@ -66,6 +66,7 @@ struct StatusResponse {
     status: String,
     active_outage: Option<db::Outage>,
     last_pings: Vec<db::PingRecord>,
+    icmp_mode: String,
 }
 
 async fn get_status(State(state): State<AppState>) -> Result<Json<StatusResponse>, AppError> {
@@ -82,6 +83,7 @@ async fn get_status(State(state): State<AppState>) -> Result<Json<StatusResponse
         status: status.to_string(),
         active_outage,
         last_pings,
+        icmp_mode: "tcp".to_string(),
     }))
 }
 
@@ -92,9 +94,10 @@ async fn get_status(State(state): State<AppState>) -> Result<Json<StatusResponse
 async fn get_pings(
     State(state): State<AppState>,
     Query(params): Query<PingQueryParams>,
-) -> Result<Json<Vec<db::PingRecord>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let pings = db::get_pings(&state.db, &params).await?;
-    Ok(Json(pings))
+    let total = pings.len();
+    Ok(Json(serde_json::json!({ "pings": pings, "total": total })))
 }
 
 // ---------------------------------------------------------------------------
@@ -104,9 +107,9 @@ async fn get_pings(
 async fn get_outages(
     State(state): State<AppState>,
     Query(params): Query<OutageQueryParams>,
-) -> Result<Json<Vec<db::Outage>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let outages = db::get_outages(&state.db, &params).await?;
-    Ok(Json(outages))
+    Ok(Json(serde_json::json!({ "outages": outages })))
 }
 
 // ---------------------------------------------------------------------------
@@ -148,79 +151,71 @@ async fn get_stats(
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct WindowSummary {
-    window_label: String,
-    window_s: i64,
-    uptime_pct: f64,
+struct StatsSummaryResponse {
+    uptime_1h: f64,
+    uptime_24h: f64,
+    uptime_7d: f64,
     mtbf_s: Option<f64>,
     mttr_s: Option<f64>,
-    outage_count: i64,
-}
-
-#[derive(Serialize)]
-struct SummaryResponse {
-    windows: Vec<WindowSummary>,
+    outage_count_today: i64,
+    jitter_ms: f64,
+    packet_loss_pct: f64,
+    latency_p95: f64,
 }
 
 async fn get_stats_summary(
     State(state): State<AppState>,
-) -> Result<Json<SummaryResponse>, AppError> {
-    let windows = [
-        ("1h", 3_600i64),
-        ("24h", 86_400),
-        ("7d", 604_800),
-        ("30d", 2_592_000),
-    ];
-
-    let mut summaries = Vec::with_capacity(windows.len());
-
-    for (label, window_s) in &windows {
-        let from = chrono::Utc::now() - chrono::Duration::seconds(*window_s);
-        let from_str = from.to_rfc3339();
-
+) -> Result<Json<StatsSummaryResponse>, AppError> {
+    async fn window_stats(
+        db: &sqlx::SqlitePool,
+        window_s: i64,
+    ) -> Result<(f64, Option<f64>, Option<f64>, i64), sqlx::Error> {
+        let from = (chrono::Utc::now() - chrono::Duration::seconds(window_s)).to_rfc3339();
         let params = OutageQueryParams {
-            from: Some(from_str),
+            from: Some(from),
             to: None,
             cause: None,
             limit: Some(500),
         };
-        let outages = db::get_outages(&state.db, &params).await?;
-
-        let outage_count = outages.len() as i64;
-        let total_outage_s: f64 = outages
-            .iter()
-            .filter_map(|o| o.duration_s)
-            .sum();
-
-        let uptime_pct = (1.0 - total_outage_s / *window_s as f64) * 100.0;
-
-        let mtbf_s = if outage_count > 0 {
-            Some(*window_s as f64 / outage_count as f64)
+        let outages = db::get_outages(db, &params).await?;
+        let count = outages.len() as i64;
+        let total_s: f64 = outages.iter().filter_map(|o| o.duration_s).sum();
+        let uptime = ((1.0 - total_s / window_s as f64) * 100.0).clamp(0.0, 100.0);
+        let mtbf = if count > 0 {
+            Some(window_s as f64 / count as f64)
         } else {
             None
         };
-
-        let closed: Vec<f64> = outages
-            .iter()
-            .filter_map(|o| o.duration_s)
-            .collect();
-        let mttr_s = if closed.is_empty() {
+        let closed: Vec<f64> = outages.iter().filter_map(|o| o.duration_s).collect();
+        let mttr = if closed.is_empty() {
             None
         } else {
             Some(closed.iter().sum::<f64>() / closed.len() as f64)
         };
-
-        summaries.push(WindowSummary {
-            window_label: label.to_string(),
-            window_s: *window_s,
-            uptime_pct,
-            mtbf_s,
-            mttr_s,
-            outage_count,
-        });
+        Ok((uptime, mtbf, mttr, count))
     }
 
-    Ok(Json(SummaryResponse { windows: summaries }))
+    let (uptime_1h, _, _, _) = window_stats(&state.db, 3_600).await?;
+    let (uptime_24h, mtbf_s, mttr_s, outage_count_today) =
+        window_stats(&state.db, 86_400).await?;
+    let (uptime_7d, _, _, _) = window_stats(&state.db, 604_800).await?;
+
+    let latest_stat = db::get_latest_stats(&state.db).await?;
+
+    Ok(Json(StatsSummaryResponse {
+        uptime_1h,
+        uptime_24h,
+        uptime_7d,
+        mtbf_s,
+        mttr_s,
+        outage_count_today,
+        jitter_ms: latest_stat.as_ref().map(|s| s.jitter_ms).unwrap_or(0.0),
+        packet_loss_pct: latest_stat
+            .as_ref()
+            .map(|s| s.packet_loss_pct)
+            .unwrap_or(0.0),
+        latency_p95: latest_stat.as_ref().map(|s| s.latency_p95).unwrap_or(0.0),
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -241,9 +236,9 @@ struct SpeedTestQuery {
 async fn get_speed_tests(
     State(state): State<AppState>,
     Query(params): Query<SpeedTestQuery>,
-) -> Result<Json<Vec<db::SpeedTest>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let tests = db::get_speed_tests(&state.db, params.limit).await?;
-    Ok(Json(tests))
+    Ok(Json(serde_json::json!({ "tests": tests })))
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +289,7 @@ async fn run_speed_test(
     state.broadcaster.send(crate::sse::SseEvent::SpeedTestStart {
         test_id: id,
         trigger: "manual".to_string(),
+        timestamp: Utc::now().to_rfc3339(),
     });
 
     Ok((
@@ -367,10 +363,10 @@ struct HeatmapQuery {
 async fn get_heatmap(
     State(state): State<AppState>,
     Query(params): Query<HeatmapQuery>,
-) -> Result<Json<Vec<db::HeatmapCell>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let days = params.days.unwrap_or(7).max(1).min(90);
     let cells = db::get_heatmap_data(&state.db, days).await?;
-    Ok(Json(cells))
+    Ok(Json(serde_json::json!({ "cells": cells })))
 }
 
 // ---------------------------------------------------------------------------

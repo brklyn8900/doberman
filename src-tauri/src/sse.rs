@@ -45,12 +45,15 @@ pub enum SseEvent {
     SpeedTestStart {
         test_id: i64,
         trigger: String,
+        timestamp: String,
     },
     SpeedTestResult {
-        test_id: i64,
+        id: i64,
+        timestamp: String,
         download_mbps: f64,
         upload_mbps: f64,
         ping_ms: f64,
+        server_name: Option<String>,
         trigger: String,
     },
     StatusChange {

@@ -40,6 +40,7 @@ pub struct SpeedTest {
     pub upload_mbps: f64,
     pub ping_ms: f64,
     pub server_name: Option<String>,
+    #[serde(rename = "trigger")]
     pub trigger_type: String,
     pub outage_id: Option<i64>,
 }

@@ -136,6 +136,7 @@ impl SpeedTestManager {
         broadcaster.send(SseEvent::SpeedTestStart {
             test_id: 0,
             trigger: trigger_type.to_string(),
+            timestamp: Utc::now().to_rfc3339(),
         });
 
         info!("Starting speed test (trigger: {trigger_type})");
@@ -169,11 +170,13 @@ impl SpeedTestManager {
         );
 
         broadcaster.send(SseEvent::SpeedTestResult {
-            test_id,
+            id: test_id,
+            timestamp: test.timestamp.clone(),
             download_mbps: test.download_mbps,
             upload_mbps: test.upload_mbps,
             ping_ms: test.ping_ms,
-            trigger: test.trigger_type,
+            server_name: test.server_name.clone(),
+            trigger: test.trigger_type.clone(),
         });
 
         Ok(test_id)
