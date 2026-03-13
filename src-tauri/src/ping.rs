@@ -213,14 +213,18 @@ pub async fn start_ping_loop(
     broadcaster: SseBroadcaster,
     config: Arc<RwLock<Config>>,
 ) {
-    // Detect ICMP permission on startup
-    let use_tcp_fallback = match detect_icmp_support().await {
-        true => {
+    // Detect ICMP permission on startup (catch panics from tokio socket registration)
+    let use_tcp_fallback = match tokio::task::spawn(detect_icmp_support()).await {
+        Ok(true) => {
             info!("ICMP ping available");
             false
         }
-        false => {
+        Ok(false) => {
             warn!("ICMP ping unavailable (permission denied), falling back to TCP probes on port 443");
+            true
+        }
+        Err(e) => {
+            warn!("ICMP detection panicked ({e}), falling back to TCP probes on port 443");
             true
         }
     };
