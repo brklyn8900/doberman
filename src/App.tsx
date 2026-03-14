@@ -9,8 +9,9 @@ import OutageTable from "./components/OutageTable";
 import HeatmapView from "./components/HeatmapView";
 import ReportExport from "./components/ReportExport";
 import SettingsPanel from "./components/SettingsPanel";
+import DebugPanel from "./components/DebugPanel";
 
-type View = "dashboard" | "outages" | "speed-tests" | "heatmap" | "reports" | "settings";
+type View = "dashboard" | "outages" | "speed-tests" | "heatmap" | "reports" | "settings" | "debug";
 
 const NAV_ITEMS: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -19,6 +20,7 @@ const NAV_ITEMS: { id: View; label: string }[] = [
   { id: "heatmap", label: "Heatmap" },
   { id: "reports", label: "Reports" },
   { id: "settings", label: "Settings" },
+  { id: "debug", label: "Debug" },
 ];
 
 function App() {
@@ -110,6 +112,12 @@ function App() {
           <div className="flex flex-col gap-4">
             <h2 className="text-lg font-semibold">Settings</h2>
             <SettingsPanel port={port} />
+          </div>
+        )}
+        {view === "debug" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-lg font-semibold">Debug</h2>
+            <DebugPanel port={port} sse={sse} />
           </div>
         )}
       </main>
