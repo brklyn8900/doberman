@@ -24,32 +24,58 @@ pub struct SpeedTestOutput {
     pub server_name: Option<String>,
 }
 
-/// Intermediate structs for deserializing speedtest --format=json output.
+/// Ookla speedtest --format=json output
 #[derive(Deserialize)]
-struct SpeedTestJson {
-    download: SpeedTestBandwidth,
-    upload: SpeedTestBandwidth,
-    ping: SpeedTestPing,
-    server: Option<SpeedTestServer>,
+struct OoklaJson {
+    download: OoklaBandwidth,
+    upload: OoklaBandwidth,
+    ping: OoklaPing,
+    server: Option<OoklaServer>,
 }
 
 #[derive(Deserialize)]
-struct SpeedTestBandwidth {
+struct OoklaBandwidth {
     bandwidth: f64, // bytes per second
 }
 
 #[derive(Deserialize)]
-struct SpeedTestPing {
-    latency: f64, // milliseconds
+struct OoklaPing {
+    latency: f64,
 }
 
 #[derive(Deserialize)]
-struct SpeedTestServer {
+struct OoklaServer {
     name: Option<String>,
 }
 
-/// Run the `speedtest` CLI and parse its JSON output.
+/// speedtest-cli --json output (Python version)
+#[derive(Deserialize)]
+struct SpeedTestCliJson {
+    download: f64,  // bits per second
+    upload: f64,    // bits per second
+    ping: f64,      // milliseconds
+    server: Option<SpeedTestCliServer>,
+}
+
+#[derive(Deserialize)]
+struct SpeedTestCliServer {
+    sponsor: Option<String>,
+    name: Option<String>,
+}
+
+/// Run the speedtest CLI and parse its JSON output.
+/// Tries Ookla `speedtest` first, falls back to Python `speedtest-cli`.
 pub async fn run_speed_test() -> Result<SpeedTestOutput, String> {
+    // Try Ookla speedtest first
+    if let Ok(result) = run_ookla_speedtest().await {
+        return Ok(result);
+    }
+
+    // Fall back to speedtest-cli (Python)
+    run_speedtest_cli().await
+}
+
+async fn run_ookla_speedtest() -> Result<SpeedTestOutput, String> {
     let output = tokio::time::timeout(
         Duration::from_secs(120),
         tokio::process::Command::new("speedtest")
@@ -57,18 +83,17 @@ pub async fn run_speed_test() -> Result<SpeedTestOutput, String> {
             .output(),
     )
     .await
-    .map_err(|_| "Speed test timed out after 120 seconds".to_string())?
-    .map_err(|e| format!("Failed to execute speedtest command: {e}"))?;
+    .map_err(|_| "Timed out".to_string())?
+    .map_err(|e| format!("Failed to execute speedtest: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("speedtest exited with {}: {stderr}", output.status));
     }
 
-    let json: SpeedTestJson = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("Failed to parse speedtest JSON: {e}"))?;
+    let json: OoklaJson = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse Ookla JSON: {e}"))?;
 
-    // Convert bytes/s to Mbps (megabits per second)
     let bytes_to_mbps = |b: f64| (b * 8.0) / 1_000_000.0;
 
     Ok(SpeedTestOutput {
@@ -76,6 +101,38 @@ pub async fn run_speed_test() -> Result<SpeedTestOutput, String> {
         upload_mbps: bytes_to_mbps(json.upload.bandwidth),
         ping_ms: json.ping.latency,
         server_name: json.server.and_then(|s| s.name),
+    })
+}
+
+async fn run_speedtest_cli() -> Result<SpeedTestOutput, String> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(120),
+        tokio::process::Command::new("speedtest-cli")
+            .args(["--json"])
+            .output(),
+    )
+    .await
+    .map_err(|_| "Speed test timed out after 120 seconds".to_string())?
+    .map_err(|e| format!("Failed to execute speedtest-cli: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("speedtest-cli exited with {}: {stderr}", output.status));
+    }
+
+    let json: SpeedTestCliJson = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse speedtest-cli JSON: {e}"))?;
+
+    let bits_to_mbps = |b: f64| b / 1_000_000.0;
+    let server_name = json.server.and_then(|s| {
+        s.sponsor.or(s.name)
+    });
+
+    Ok(SpeedTestOutput {
+        download_mbps: bits_to_mbps(json.download),
+        upload_mbps: bits_to_mbps(json.upload),
+        ping_ms: json.ping,
+        server_name,
     })
 }
 
