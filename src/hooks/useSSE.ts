@@ -135,7 +135,8 @@ export function useSSE(port: number | null): SSEState {
         retryDelay.current = 1000;
       };
 
-      es.onmessage = (event) => {
+      // Handler for all named SSE event types
+      const handleEvent = (event: MessageEvent) => {
         if (unmounted) return;
         try {
           const data = JSON.parse(event.data) as SseEvent;
@@ -148,6 +149,8 @@ export function useSSE(port: number | null): SSEState {
                 return next;
               });
               setPingHistory((prev) => trimHistory([...prev, data]));
+              // Set status to "up" when we get successful pings
+              setStatus((prev) => prev === "unknown" ? "up" : prev);
               break;
 
             case "status_change":
@@ -195,6 +198,20 @@ export function useSSE(port: number | null): SSEState {
           // ignore malformed events
         }
       };
+
+      // Listen for named SSE events (the backend sends event: <name>)
+      const eventTypes = [
+        "ping_result",
+        "outage_start",
+        "outage_end",
+        "stats_update",
+        "status_change",
+        "speed_test_start",
+        "speed_test_result",
+      ];
+      for (const t of eventTypes) {
+        es.addEventListener(t, handleEvent as EventListener);
+      }
 
       es.onerror = () => {
         if (unmounted) return;
