@@ -96,7 +96,7 @@ export default function SpeedTestPanel({
             className={`rounded-xl px-5 py-2.5 text-sm font-medium transition-colors ${
               running || cooldown > 0
                 ? "cursor-not-allowed border border-stone-700 bg-stone-800 text-stone-500"
-                : "bg-stone-100 text-stone-900 hover:bg-stone-200"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"
             }`}
           >
             {running ? (

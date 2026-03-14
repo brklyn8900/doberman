@@ -198,8 +198,7 @@ async fn get_stats_summary(
     }
 
     let (uptime_1h, _, _, _) = window_stats(&state.db, 3_600).await?;
-    let (uptime_24h, mtbf_s, mttr_s, outage_count_today) =
-        window_stats(&state.db, 86_400).await?;
+    let (uptime_24h, mtbf_s, mttr_s, outage_count_today) = window_stats(&state.db, 86_400).await?;
     let (uptime_7d, _, _, _) = window_stats(&state.db, 604_800).await?;
 
     let latest_stat = db::get_latest_stats(&state.db).await?;
@@ -247,9 +246,7 @@ async fn get_speed_tests(
 // POST /api/speed-tests/run
 // ---------------------------------------------------------------------------
 
-async fn run_speed_test(
-    State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+async fn run_speed_test(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     let config = state.config.read().await;
     let cooldown_s = config.speed_test_cooldown_s as u64;
     drop(config);
@@ -328,9 +325,7 @@ async fn put_config(
 // GET /api/events (SSE)
 // ---------------------------------------------------------------------------
 
-async fn sse_events(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn sse_events(State(state): State<AppState>) -> impl IntoResponse {
     sse::sse_handler(State(state.broadcaster)).await
 }
 
@@ -382,7 +377,9 @@ async fn export_csv(
 ) -> Result<impl IntoResponse, AppError> {
     let outages = db::get_outages_in_range(&state.db, &params.from, &params.to).await?;
 
-    let mut csv = String::from("Start Time,End Time,Duration (seconds),Duration (human),Cause,Targets Down\n");
+    let mut csv = String::from(
+        "Start Time,End Time,Duration (seconds),Duration (human),Cause,Targets Down\n",
+    );
     for o in &outages {
         let ended = o.ended_at.as_deref().unwrap_or("ongoing");
         let dur_s = o.duration_s.unwrap_or(0.0);
@@ -434,7 +431,10 @@ async fn export_report(
     let mut outage_rows = String::new();
     for o in &outages {
         let ended = o.ended_at.as_deref().unwrap_or("ongoing");
-        let dur = o.duration_s.map(format_duration_human).unwrap_or_else(|| "ongoing".into());
+        let dur = o
+            .duration_s
+            .map(format_duration_human)
+            .unwrap_or_else(|| "ongoing".into());
         outage_rows.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             o.started_at, ended, dur, o.cause, o.targets_down
@@ -445,9 +445,12 @@ async fn export_report(
     let speed_section = if speed_tests.is_empty() {
         "<p>No speed tests recorded in this period.</p>".to_string()
     } else {
-        let avg_dl: f64 = speed_tests.iter().map(|s| s.download_mbps).sum::<f64>() / speed_tests.len() as f64;
-        let avg_ul: f64 = speed_tests.iter().map(|s| s.upload_mbps).sum::<f64>() / speed_tests.len() as f64;
-        let avg_ping: f64 = speed_tests.iter().map(|s| s.ping_ms).sum::<f64>() / speed_tests.len() as f64;
+        let avg_dl: f64 =
+            speed_tests.iter().map(|s| s.download_mbps).sum::<f64>() / speed_tests.len() as f64;
+        let avg_ul: f64 =
+            speed_tests.iter().map(|s| s.upload_mbps).sum::<f64>() / speed_tests.len() as f64;
+        let avg_ping: f64 =
+            speed_tests.iter().map(|s| s.ping_ms).sum::<f64>() / speed_tests.len() as f64;
         format!(
             "<table><tr><th>Tests</th><th>Avg Download</th><th>Avg Upload</th><th>Avg Ping</th></tr>\
              <tr><td>{}</td><td>{:.1} Mbps</td><td>{:.1} Mbps</td><td>{:.1} ms</td></tr></table>",

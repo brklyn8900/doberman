@@ -51,9 +51,9 @@ struct OoklaServer {
 /// speedtest-cli --json output (Python version)
 #[derive(Deserialize)]
 struct SpeedTestCliJson {
-    download: f64,  // bits per second
-    upload: f64,    // bits per second
-    ping: f64,      // milliseconds
+    download: f64, // bits per second
+    upload: f64,   // bits per second
+    ping: f64,     // milliseconds
     server: Option<SpeedTestCliServer>,
 }
 
@@ -117,16 +117,17 @@ async fn run_speedtest_cli() -> Result<SpeedTestOutput, String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("speedtest-cli exited with {}: {stderr}", output.status));
+        return Err(format!(
+            "speedtest-cli exited with {}: {stderr}",
+            output.status
+        ));
     }
 
     let json: SpeedTestCliJson = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("Failed to parse speedtest-cli JSON: {e}"))?;
 
     let bits_to_mbps = |b: f64| b / 1_000_000.0;
-    let server_name = json.server.and_then(|s| {
-        s.sponsor.or(s.name)
-    });
+    let server_name = json.server.and_then(|s| s.sponsor.or(s.name));
 
     Ok(SpeedTestOutput {
         download_mbps: bits_to_mbps(json.download),

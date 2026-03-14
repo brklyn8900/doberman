@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { getApiPort, waitForApi } from "./api";
 import { useSSE } from "./hooks/useSSE";
 import StatusBanner from "./components/StatusBanner";
@@ -11,7 +11,14 @@ import ReportExport from "./components/ReportExport";
 import SettingsPanel from "./components/SettingsPanel";
 import DebugPanel from "./components/DebugPanel";
 import HelpPanel from "./components/HelpPanel";
-import dobermanLogo from "../images/doberman-logo.png";
+import dobermanLogo from "../images/doberman-logo-inverse.png";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDownIcon } from "lucide-react";
 
 type View =
   | "dashboard"
@@ -47,8 +54,6 @@ const SECONDARY_NAV: View[] = ["settings", "help", "debug"];
 function App() {
   const [view, setView] = useState<View>("dashboard");
   const [port, setPort] = useState<number | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,22 +79,11 @@ function App() {
     ? "bg-emerald-400"
     : "bg-stone-600";
 
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, []);
-
   const navLabel = (id: View) =>
     NAV_ITEMS.find((item) => item.id === id)?.label ?? id;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell dark">
       <header className="app-header">
         <div className="app-header-inner">
           <div className="flex items-center gap-4">
@@ -115,41 +109,41 @@ function App() {
               {PRIMARY_NAV.map((id) => (
                 <button
                   key={id}
-                  onClick={() => {
-                    setView(id);
-                    setMenuOpen(false);
-                  }}
+                  onClick={() => setView(id)}
                   className={`app-nav-button ${view === id ? "app-nav-button-active" : ""}`}
                 >
                   {navLabel(id)}
                 </button>
               ))}
 
-              <div ref={menuRef} className="relative">
-                <button
-                  onClick={() => setMenuOpen((open) => !open)}
-                  className={`app-nav-button ${SECONDARY_NAV.includes(view) ? "app-nav-button-active" : ""}`}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={`app-nav-button inline-flex items-center gap-1.5 ${SECONDARY_NAV.includes(view) ? "app-nav-button-active" : ""}`}
+                  >
+                    More
+                    <ChevronDownIcon className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-44 rounded-2xl border-stone-800 bg-stone-950/95 p-2 text-stone-200 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
                 >
-                  More
-                </button>
-
-                {menuOpen && (
-                  <div className="app-menu">
-                    {SECONDARY_NAV.map((id) => (
-                      <button
-                        key={id}
-                        onClick={() => {
-                          setView(id);
-                          setMenuOpen(false);
-                        }}
-                        className={`app-menu-item ${view === id ? "app-menu-item-active" : ""}`}
-                      >
-                        {navLabel(id)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  {SECONDARY_NAV.map((id) => (
+                    <DropdownMenuItem
+                      key={id}
+                      onClick={() => setView(id)}
+                      className={`rounded-xl px-3 py-2 text-sm ${
+                        view === id
+                          ? "bg-primary text-primary-foreground"
+                          : "text-stone-300 focus:bg-stone-900 focus:text-stone-100"
+                      }`}
+                    >
+                      {navLabel(id)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </nav>
 
             <div className="flex flex-wrap gap-2">

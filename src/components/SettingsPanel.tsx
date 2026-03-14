@@ -1,8 +1,31 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchConfig, updateConfig, Config } from "../api";
+import { fetchConfig, updateConfig, sendTestNotification, Config } from "../api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   port: number | null;
+}
+
+interface TargetEntry {
+  id: string;
+  value: string;
+}
+
+function createTargetEntry(value = ""): TargetEntry {
+  return {
+    id: crypto.randomUUID(),
+    value,
+  };
 }
 
 // Validate IPv4, IPv6, or hostname
@@ -30,10 +53,12 @@ export default function SettingsPanel({ port }: Props) {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Form state
-  const [targets, setTargets] = useState<string[]>([]);
+  const [targets, setTargets] = useState<TargetEntry[]>([]);
   const [gatewayIp, setGatewayIp] = useState("");
   const [pingInterval, setPingInterval] = useState(30);
   const [outageThreshold, setOutageThreshold] = useState(3);
+  const [notifyOnOutage, setNotifyOnOutage] = useState(true);
+  const [notifyOnRecovery, setNotifyOnRecovery] = useState(true);
   const [speedTestCooldown, setSpeedTestCooldown] = useState(180);
   const [speedTestScheduleHours, setSpeedTestScheduleHours] = useState(6);
   const [autoSpeedTestOnRecovery, setAutoSpeedTestOnRecovery] = useState(true);
@@ -41,6 +66,7 @@ export default function SettingsPanel({ port }: Props) {
   const [advertisedUp, setAdvertisedUp] = useState("");
   const [dataRetention, setDataRetention] = useState(90);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [sendingTestNotification, setSendingTestNotification] = useState(false);
 
   const loadConfig = useCallback(async () => {
     if (!port) return;
@@ -48,10 +74,12 @@ export default function SettingsPanel({ port }: Props) {
       const cfg = await fetchConfig(port);
       setConfig(cfg);
       const parsedTargets: string[] = JSON.parse(cfg.targets);
-      setTargets(parsedTargets);
+      setTargets(parsedTargets.map((target) => createTargetEntry(target)));
       setGatewayIp(cfg.gateway_ip ?? "");
       setPingInterval(cfg.ping_interval_s);
       setOutageThreshold(cfg.outage_threshold);
+      setNotifyOnOutage(cfg.notify_on_outage);
+      setNotifyOnRecovery(cfg.notify_on_recovery);
       setSpeedTestCooldown(cfg.speed_test_cooldown_s);
       setSpeedTestScheduleHours(Math.round(cfg.speed_test_schedule_s / 3600));
       setAutoSpeedTestOnRecovery(cfg.auto_speed_test_on_recovery);
@@ -73,7 +101,9 @@ export default function SettingsPanel({ port }: Props) {
     if (!port) return;
 
     // Validate targets
-    const validTargets = targets.filter((t) => t.trim());
+    const validTargets = targets
+      .map((target) => target.value.trim())
+      .filter(Boolean);
     if (validTargets.length < 2) {
       setMessage({ type: "error", text: "At least 2 ping targets required" });
       return;
@@ -93,6 +123,8 @@ export default function SettingsPanel({ port }: Props) {
         gateway_ip: gatewayIp.trim() || null,
         ping_interval_s: Math.max(10, Math.min(300, pingInterval)),
         outage_threshold: Math.max(2, Math.min(10, outageThreshold)),
+        notify_on_outage: notifyOnOutage,
+        notify_on_recovery: notifyOnRecovery,
         speed_test_cooldown_s: Math.max(60, speedTestCooldown),
         speed_test_schedule_s: speedTestScheduleHours * 3600,
         auto_speed_test_on_recovery: autoSpeedTestOnRecovery,
@@ -111,15 +143,34 @@ export default function SettingsPanel({ port }: Props) {
     }
   };
 
-  const addTarget = () => setTargets([...targets, ""]);
-  const removeTarget = (i: number) => {
+  const addTarget = () => setTargets([...targets, createTargetEntry()]);
+  const removeTarget = (id: string) => {
     if (targets.length <= 2) return;
-    setTargets(targets.filter((_, idx) => idx !== i));
+    setTargets(targets.filter((target) => target.id !== id));
   };
-  const updateTarget = (i: number, value: string) => {
-    const next = [...targets];
-    next[i] = value;
-    setTargets(next);
+  const updateTarget = (id: string, value: string) => {
+    setTargets((current) =>
+      current.map((target) =>
+        target.id === id ? { ...target, value } : target,
+      ),
+    );
+  };
+
+  const handleTestNotification = async () => {
+    setSendingTestNotification(true);
+    setMessage(null);
+
+    try {
+      const logPath = await sendTestNotification();
+      setMessage({
+        type: "success",
+        text: `Test notification queued. Log: ${logPath}`,
+      });
+    } catch {
+      setMessage({ type: "error", text: "Failed to send test notification" });
+    } finally {
+      setSendingTestNotification(false);
+    }
   };
 
   if (loading) {
@@ -129,9 +180,6 @@ export default function SettingsPanel({ port }: Props) {
       </div>
     );
   }
-
-  const inputClass = "app-input";
-  const labelClass = "mb-1 block text-sm font-medium text-stone-300";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -152,31 +200,35 @@ export default function SettingsPanel({ port }: Props) {
       <section className="app-panel p-5">
         <h3 className="mb-3 text-sm font-semibold text-stone-200">Ping Targets</h3>
         <div className="space-y-2">
-          {targets.map((t, i) => (
-            <div key={i} className="flex gap-2">
-              <input
+          {targets.map((target, i) => (
+            <div key={target.id} className="flex gap-2">
+              <Input
+                id={`target-${i}`}
                 type="text"
-                value={t}
-                onChange={(e) => updateTarget(i, e.target.value)}
+                value={target.value}
+                onChange={(e) => updateTarget(target.id, e.target.value)}
                 placeholder="e.g. 8.8.8.8 or dns.google"
-                className={inputClass}
+                className="h-10"
               />
-              <button
-                onClick={() => removeTarget(i)}
+              <Button
+                onClick={() => removeTarget(target.id)}
                 disabled={targets.length <= 2}
-                className="app-button-secondary shrink-0 px-3 text-stone-400 hover:text-rose-300"
+                variant="secondary"
+                className="shrink-0 text-stone-400 hover:text-rose-300"
               >
                 Remove
-              </button>
+              </Button>
             </div>
           ))}
         </div>
-        <button
+        <Button
           onClick={addTarget}
-          className="app-button-secondary mt-2 px-3 py-1"
+          variant="secondary"
+          size="sm"
+          className="mt-2"
         >
           + Add Target
-        </button>
+        </Button>
       </section>
 
       {/* Gateway */}
@@ -184,21 +236,23 @@ export default function SettingsPanel({ port }: Props) {
         <h3 className="mb-3 text-sm font-semibold text-stone-200">Gateway</h3>
         <div className="flex gap-2">
           <div className="flex-1">
-            <label className={labelClass}>Gateway IP</label>
-            <input
+            <Label htmlFor="gateway-ip" className="mb-2">Gateway IP</Label>
+            <Input
+              id="gateway-ip"
               type="text"
               value={gatewayIp}
               onChange={(e) => setGatewayIp(e.target.value)}
               placeholder="e.g. 192.168.1.1"
-              className={inputClass}
+              className="h-10"
             />
           </div>
-          <button
+          <Button
             onClick={() => setGatewayIp("")}
-            className="app-button-secondary mt-6 shrink-0"
+            variant="secondary"
+            className="mt-7 shrink-0"
           >
             Auto-detect
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -207,25 +261,74 @@ export default function SettingsPanel({ port }: Props) {
         <h3 className="mb-3 text-sm font-semibold text-stone-200">Monitoring</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Ping interval (seconds)</label>
-            <input
+            <Label htmlFor="ping-interval" className="mb-2">Ping interval (seconds)</Label>
+            <Input
+              id="ping-interval"
               type="number"
               min={10}
               max={300}
               value={pingInterval}
               onChange={(e) => setPingInterval(parseInt(e.target.value) || 30)}
-              className={inputClass}
+              className="h-10"
             />
           </div>
           <div>
-            <label className={labelClass}>Outage threshold (rounds)</label>
-            <input
+            <Label htmlFor="outage-threshold" className="mb-2">Outage threshold (rounds)</Label>
+            <Input
+              id="outage-threshold"
               type="number"
               min={2}
               max={10}
               value={outageThreshold}
               onChange={(e) => setOutageThreshold(parseInt(e.target.value) || 3)}
-              className={inputClass}
+              className="h-10"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Notifications */}
+      <section className="app-panel p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="mb-1 text-sm font-semibold text-stone-200">Notifications</h3>
+            <p className="text-xs text-stone-500">
+              Control outage alerts now, then validate bundled behavior on macOS and Windows later.
+            </p>
+          </div>
+          <Button
+            onClick={handleTestNotification}
+            variant="secondary"
+            disabled={sendingTestNotification}
+          >
+            {sendingTestNotification ? "Sending..." : "Send Test Notification"}
+          </Button>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-800 bg-stone-950/70 px-4 py-3">
+            <div>
+              <Label htmlFor="notify-on-outage">Outage detected</Label>
+              <p className="mt-1 text-xs text-stone-500">
+                Send a desktop alert when Doberman transitions from up to down.
+              </p>
+            </div>
+            <Switch
+              id="notify-on-outage"
+              checked={notifyOnOutage}
+              onCheckedChange={setNotifyOnOutage}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-800 bg-stone-950/70 px-4 py-3">
+            <div>
+              <Label htmlFor="notify-on-recovery">Connection restored</Label>
+              <p className="mt-1 text-xs text-stone-500">
+                Send a desktop alert when the outage ends and connectivity returns.
+              </p>
+            </div>
+            <Switch
+              id="notify-on-recovery"
+              checked={notifyOnRecovery}
+              onCheckedChange={setNotifyOnRecovery}
             />
           </div>
         </div>
@@ -236,41 +339,36 @@ export default function SettingsPanel({ port }: Props) {
         <h3 className="mb-3 text-sm font-semibold text-stone-200">Speed Tests</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Cooldown (seconds)</label>
-            <input
+            <Label htmlFor="speed-test-cooldown" className="mb-2">Cooldown (seconds)</Label>
+            <Input
+              id="speed-test-cooldown"
               type="number"
               min={60}
               value={speedTestCooldown}
               onChange={(e) => setSpeedTestCooldown(parseInt(e.target.value) || 180)}
-              className={inputClass}
+              className="h-10"
             />
           </div>
           <div>
-            <label className={labelClass}>Schedule (hours, 0=disabled)</label>
-            <input
+            <Label htmlFor="speed-test-schedule" className="mb-2">Schedule (hours, 0=disabled)</Label>
+            <Input
+              id="speed-test-schedule"
               type="number"
               min={0}
               max={24}
               value={speedTestScheduleHours}
               onChange={(e) => setSpeedTestScheduleHours(parseInt(e.target.value) || 0)}
-              className={inputClass}
+              className="h-10"
             />
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
-          <button
-            onClick={() => setAutoSpeedTestOnRecovery(!autoSpeedTestOnRecovery)}
-            className={`relative h-6 w-11 rounded-full transition-colors ${
-              autoSpeedTestOnRecovery ? "bg-stone-100" : "bg-stone-700"
-            }`}
-          >
-            <span
-              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full ${autoSpeedTestOnRecovery ? "bg-stone-900" : "bg-stone-300"} transition-transform ${
-                autoSpeedTestOnRecovery ? "translate-x-5" : ""
-              }`}
-            />
-          </button>
-          <span className="text-sm text-stone-300">Auto speed test on recovery</span>
+          <Switch
+            id="auto-speed-test-on-recovery"
+            checked={autoSpeedTestOnRecovery}
+            onCheckedChange={setAutoSpeedTestOnRecovery}
+          />
+          <Label htmlFor="auto-speed-test-on-recovery">Auto speed test on recovery</Label>
         </div>
       </section>
 
@@ -282,27 +380,29 @@ export default function SettingsPanel({ port }: Props) {
         </p>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Download (Mbps)</label>
-            <input
+            <Label htmlFor="advertised-download" className="mb-2">Download (Mbps)</Label>
+            <Input
+              id="advertised-download"
               type="number"
               min={0}
               step="any"
               value={advertisedDown}
               onChange={(e) => setAdvertisedDown(e.target.value)}
               placeholder="Optional"
-              className={inputClass}
+              className="h-10"
             />
           </div>
           <div>
-            <label className={labelClass}>Upload (Mbps)</label>
-            <input
+            <Label htmlFor="advertised-upload" className="mb-2">Upload (Mbps)</Label>
+            <Input
+              id="advertised-upload"
               type="number"
               min={0}
               step="any"
               value={advertisedUp}
               onChange={(e) => setAdvertisedUp(e.target.value)}
               placeholder="Optional"
-              className={inputClass}
+              className="h-10"
             />
           </div>
         </div>
@@ -313,53 +413,41 @@ export default function SettingsPanel({ port }: Props) {
         <h3 className="mb-3 text-sm font-semibold text-stone-200">Data & Appearance</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Data retention (days)</label>
-            <input
+            <Label htmlFor="data-retention" className="mb-2">Data retention (days)</Label>
+            <Input
+              id="data-retention"
               type="number"
               min={7}
               max={365}
               value={dataRetention}
               onChange={(e) => setDataRetention(parseInt(e.target.value) || 90)}
-              className={inputClass}
+              className="h-10"
             />
           </div>
           <div>
-            <label className={labelClass}>Theme</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTheme("dark")}
-                className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
-                  theme === "dark"
-                    ? "border-stone-500 bg-stone-100 text-stone-900"
-                    : "border-stone-700 text-stone-400 hover:bg-stone-800"
-                }`}
-              >
-                Dark
-              </button>
-              <button
-                onClick={() => setTheme("light")}
-                className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
-                  theme === "light"
-                    ? "border-stone-500 bg-stone-100 text-stone-900"
-                    : "border-stone-700 text-stone-400 hover:bg-stone-800"
-                }`}
-              >
-                Light
-              </button>
-            </div>
+            <Label htmlFor="theme-select" className="mb-2">Theme</Label>
+            <Select value={theme} onValueChange={(value: "dark" | "light") => setTheme(value)}>
+              <SelectTrigger id="theme-select">
+                <SelectValue placeholder="Select theme" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="dark">Dark</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </section>
 
       {/* Save */}
       <div className="flex justify-end">
-        <button
+        <Button
           onClick={handleSave}
           disabled={saving}
-          className="app-button-primary px-6"
+          className="px-6"
         >
           {saving ? "Saving..." : "Save Settings"}
-        </button>
+        </Button>
       </div>
     </div>
   );

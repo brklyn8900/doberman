@@ -108,7 +108,9 @@ async fn icmp_ping(ip: IpAddr) -> Result<f64, String> {
     let client = surge_ping::Client::new(&surge_ping::Config::default())
         .map_err(|e| format!("surge_ping client error: {e}"))?;
 
-    let mut pinger = client.pinger(ip, surge_ping::PingIdentifier(rand_id())).await;
+    let mut pinger = client
+        .pinger(ip, surge_ping::PingIdentifier(rand_id()))
+        .await;
     pinger.timeout(Duration::from_secs(5));
 
     match pinger.ping(surge_ping::PingSequence(0), &[0u8; 56]).await {
@@ -120,8 +122,7 @@ async fn icmp_ping(ip: IpAddr) -> Result<f64, String> {
 async fn tcp_ping(target: &PingTarget, ip: IpAddr, dns_ms: Option<f64>) -> PingResult {
     let addr = std::net::SocketAddr::new(ip, 443);
     let start = Instant::now();
-    match tokio::time::timeout(Duration::from_secs(5), tokio::net::TcpStream::connect(addr)).await
-    {
+    match tokio::time::timeout(Duration::from_secs(5), tokio::net::TcpStream::connect(addr)).await {
         Ok(Ok(_stream)) => PingResult {
             target: target.address.clone(),
             success: true,
@@ -220,7 +221,9 @@ pub async fn start_ping_loop(
             false
         }
         Ok(false) => {
-            warn!("ICMP ping unavailable (permission denied), falling back to TCP probes on port 443");
+            warn!(
+                "ICMP ping unavailable (permission denied), falling back to TCP probes on port 443"
+            );
             true
         }
         Err(e) => {
@@ -237,28 +240,36 @@ pub async fn start_ping_loop(
     let mut outage_detector = OutageDetector::new(initial_threshold);
 
     loop {
-        let (targets, gateway_ip, interval_s, outage_threshold) = {
+        let (
+            targets,
+            gateway_ip,
+            interval_s,
+            outage_threshold,
+            notify_on_outage,
+            notify_on_recovery,
+        ) = {
             let cfg = config.read().await;
-            let targets: Vec<String> =
-                serde_json::from_str(&cfg.targets).unwrap_or_else(|_| {
-                    vec![
-                        "8.8.8.8".to_string(),
-                        "1.1.1.1".to_string(),
-                        "208.67.222.222".to_string(),
-                    ]
-                });
-            (targets, cfg.gateway_ip.clone(), cfg.ping_interval_s as u64, cfg.outage_threshold)
+            let targets: Vec<String> = serde_json::from_str(&cfg.targets).unwrap_or_else(|_| {
+                vec![
+                    "8.8.8.8".to_string(),
+                    "1.1.1.1".to_string(),
+                    "208.67.222.222".to_string(),
+                ]
+            });
+            (
+                targets,
+                cfg.gateway_ip.clone(),
+                cfg.ping_interval_s as u64,
+                cfg.outage_threshold,
+                cfg.notify_on_outage,
+                cfg.notify_on_recovery,
+            )
         };
 
         // Keep threshold in sync with config
         outage_detector.set_threshold(outage_threshold);
 
-        let results = ping_all(
-            &targets,
-            gateway_ip.as_deref(),
-            use_tcp_fallback,
-        )
-        .await;
+        let results = ping_all(&targets, gateway_ip.as_deref(), use_tcp_fallback).await;
 
         let now = Utc::now().to_rfc3339();
 
@@ -290,7 +301,13 @@ pub async fn start_ping_loop(
 
         // Feed results to outage detector
         outage_detector
-            .process_ping_round(&results, &pool, &broadcaster)
+            .process_ping_round(
+                &results,
+                &pool,
+                &broadcaster,
+                notify_on_outage,
+                notify_on_recovery,
+            )
             .await;
 
         tokio::time::sleep(Duration::from_secs(interval_s)).await;

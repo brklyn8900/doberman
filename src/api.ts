@@ -84,6 +84,8 @@ export interface Config {
   gateway_ip: string | null;
   ping_interval_s: number;
   outage_threshold: number;
+  notify_on_outage: boolean;
+  notify_on_recovery: boolean;
   speed_test_cooldown_s: number;
   speed_test_schedule_s: number;
   auto_speed_test_on_recovery: boolean;
@@ -186,6 +188,10 @@ export async function updateConfig(
     body: JSON.stringify(config),
   });
   return res.json();
+}
+
+export async function sendTestNotification(): Promise<string> {
+  return invoke("send_test_notification");
 }
 
 export async function fetchSpeedTests(

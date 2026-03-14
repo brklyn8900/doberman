@@ -1,0 +1,25 @@
+{
+  "bundle": {
+    "targets": ["nsis", "msi"],
+    "publisher": "Armana",
+    "shortDescription": "Doberman internet outage monitor",
+    "useLocalToolsDir": true,
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "allowDowngrades": false,
+      "wix": {
+        "upgradeCode": "bcfbddb1-bc33-5ff6-8000-c829be41b5ac",
+        "language": "en-US"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "startMenuFolder": "Doberman",
+        "languages": ["English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

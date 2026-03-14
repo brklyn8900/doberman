@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use notify_rust::Notification;
 use sqlx::SqlitePool;
 use tracing::{info, warn};
 
 use crate::db;
+use crate::notifications;
 use crate::ping::PingResult;
 use crate::sse::{SseBroadcaster, SseEvent};
 use crate::traceroute;
@@ -66,10 +66,18 @@ impl OutageDetector {
         results: &[PingResult],
         pool: &Arc<SqlitePool>,
         broadcaster: &SseBroadcaster,
+        notify_on_outage: bool,
+        notify_on_recovery: bool,
     ) {
         match self.state {
-            ConnectionState::Up => self.handle_up(results, pool, broadcaster).await,
-            ConnectionState::Down => self.handle_down(results, pool, broadcaster).await,
+            ConnectionState::Up => {
+                self.handle_up(results, pool, broadcaster, notify_on_outage)
+                    .await
+            }
+            ConnectionState::Down => {
+                self.handle_down(results, pool, broadcaster, notify_on_recovery)
+                    .await
+            }
         }
     }
 
@@ -78,6 +86,7 @@ impl OutageDetector {
         results: &[PingResult],
         pool: &Arc<SqlitePool>,
         broadcaster: &SseBroadcaster,
+        notify_on_outage: bool,
     ) {
         // Count how many non-gateway targets failed
         let non_gateway_failed: Vec<&PingResult> = results
@@ -95,8 +104,14 @@ impl OutageDetector {
             );
 
             if self.consecutive_failure_count >= self.outage_threshold {
-                self.transition_to_down(results, &non_gateway_failed, pool, broadcaster)
-                    .await;
+                self.transition_to_down(
+                    results,
+                    &non_gateway_failed,
+                    pool,
+                    broadcaster,
+                    notify_on_outage,
+                )
+                .await;
             }
         } else {
             // Reset on any passing round
@@ -113,6 +128,7 @@ impl OutageDetector {
         failed: &[&PingResult],
         pool: &Arc<SqlitePool>,
         broadcaster: &SseBroadcaster,
+        notify_on_outage: bool,
     ) {
         let now = Utc::now();
 
@@ -155,16 +171,13 @@ impl OutageDetector {
 
                 // Desktop notification for outage start
                 let time_str = now.format("%H:%M:%S").to_string();
-                let notif_body = format!(
-                    "Outage detected at {} — cause: {}",
-                    time_str, cause
-                );
-                if let Err(e) = Notification::new()
-                    .summary("Doberman — Internet Outage")
-                    .body(&notif_body)
-                    .show()
-                {
-                    warn!("Failed to send outage notification: {e}");
+                let notif_body = format!("Outage detected at {} — cause: {}", time_str, cause);
+                if notify_on_outage {
+                    if let Err(e) =
+                        notifications::send_notification("Doberman — Internet Outage", &notif_body)
+                    {
+                        warn!("Failed to send outage notification: {e}");
+                    }
                 }
 
                 // Fire async traceroute (don't block the ping loop)
@@ -193,12 +206,14 @@ impl OutageDetector {
         results: &[PingResult],
         pool: &Arc<SqlitePool>,
         broadcaster: &SseBroadcaster,
+        notify_on_recovery: bool,
     ) {
         // If any non-gateway target succeeds, transition back to UP
         let any_non_gateway_success = results.iter().any(|r| !r.is_gateway && r.success);
 
         if any_non_gateway_success {
-            self.transition_to_up(pool, broadcaster).await;
+            self.transition_to_up(pool, broadcaster, notify_on_recovery)
+                .await;
         }
     }
 
@@ -206,6 +221,7 @@ impl OutageDetector {
         &mut self,
         pool: &Arc<SqlitePool>,
         broadcaster: &SseBroadcaster,
+        notify_on_recovery: bool,
     ) {
         let now = Utc::now();
         let ended_at = now.to_rfc3339();
@@ -235,12 +251,13 @@ impl OutageDetector {
                     // Desktop notification for outage end
                     let dur_human = format_duration_short(duration_s);
                     let notif_body = format!("Internet restored after {dur_human}");
-                    if let Err(e) = Notification::new()
-                        .summary("Doberman — Connection Restored")
-                        .body(&notif_body)
-                        .show()
-                    {
-                        warn!("Failed to send recovery notification: {e}");
+                    if notify_on_recovery {
+                        if let Err(e) = notifications::send_notification(
+                            "Doberman — Connection Restored",
+                            &notif_body,
+                        ) {
+                            warn!("Failed to send recovery notification: {e}");
+                        }
                     }
                 }
                 Err(e) => {

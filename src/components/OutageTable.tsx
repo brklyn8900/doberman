@@ -9,9 +9,21 @@ import {
   createColumnHelper,
   type SortingState,
   type ExpandedState,
+  type PaginationState,
 } from "@tanstack/react-table";
 import { useOutages } from "../hooks/useApi";
 import type { Outage } from "../api";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function formatDuration(seconds: number | null): string {
   if (seconds === null) return "Ongoing";
@@ -62,7 +74,10 @@ export default function OutageTable({ port }: Props) {
     { id: "started_at", desc: true },
   ]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
-  const [pageSize, setPageSize] = useState(10);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
@@ -133,9 +148,10 @@ export default function OutageTable({ port }: Props) {
   const table = useReactTable({
     data: filteredOutages,
     columns,
-    state: { sorting, expanded, pagination: { pageIndex: 0, pageSize } },
+    state: { sorting, expanded, pagination },
     onSortingChange: setSorting,
     onExpandedChange: setExpanded,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -147,49 +163,68 @@ export default function OutageTable({ port }: Props) {
     <div className="flex flex-col gap-4">
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-stone-400">
-          From
-          <input
-            type="date"
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="outage-from" className="text-xs text-stone-400">From</Label>
+          <DatePicker
+            id="outage-from"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="app-input px-2 py-1.5"
+            onChange={setDateFrom}
+            placeholder="Select start"
+            ariaLabel="Outage filter start date"
+            className="w-[164px]"
           />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-stone-400">
-          To
-          <input
-            type="date"
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="outage-to" className="text-xs text-stone-400">To</Label>
+          <DatePicker
+            id="outage-to"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="app-input px-2 py-1.5"
+            onChange={setDateTo}
+            placeholder="Select end"
+            ariaLabel="Outage filter end date"
+            className="w-[164px]"
           />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-stone-400">
-          Cause
-          <select
-            value={causeFilter}
-            onChange={(e) => setCauseFilter(e.target.value)}
-            className="app-input px-2 py-1.5"
-          >
-            <option value="">All</option>
-            <option value="isp">ISP</option>
-            <option value="local">Local</option>
-            <option value="unknown">Unknown</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-stone-400">
-          Min Duration (min)
-          <input
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="outage-cause" className="text-xs text-stone-400">Cause</Label>
+          <Select value={causeFilter || "all"} onValueChange={(value) => setCauseFilter(value === "all" ? "" : value)}>
+            <SelectTrigger id="outage-cause" className="w-[140px]">
+              <SelectValue placeholder="All causes" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="isp">ISP</SelectItem>
+              <SelectItem value="local">Local</SelectItem>
+              <SelectItem value="unknown">Unknown</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="outage-min-duration" className="text-xs text-stone-400">Min Duration (min)</Label>
+          <Input
+            id="outage-min-duration"
             type="number"
             min={0}
             step={1}
             value={minDuration}
             onChange={(e) => setMinDuration(e.target.value)}
             placeholder="0"
-            className="app-input w-24 px-2 py-1.5"
+            className="w-28"
           />
-        </label>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            setDateFrom("");
+            setDateTo("");
+            setCauseFilter("");
+            setMinDuration("");
+          }}
+          className="mb-0.5"
+        >
+          Clear filters
+        </Button>
       </div>
 
       {/* Table */}
@@ -273,43 +308,48 @@ export default function OutageTable({ port }: Props) {
           <div className="flex items-center justify-between border-t border-stone-800 bg-stone-900/80 px-3 py-2">
             <div className="flex items-center gap-2 text-xs text-stone-400">
               <span>Rows per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  table.setPageSize(Number(e.target.value));
-                }}
-                className="rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-xs text-stone-100"
+              <Select
+                value={String(pagination.pageSize)}
+                onValueChange={(value) => table.setPageSize(Number(value))}
               >
-                {[10, 25, 50].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-8 w-[88px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {[10, 25, 50].map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <span className="ml-2">
                 {filteredOutages.length} total
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <button
+              <Button
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
-                className="rounded px-2 py-1 text-xs text-stone-400 hover:bg-stone-800 disabled:opacity-30"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-stone-400"
               >
                 ← Prev
-              </button>
+              </Button>
               <span className="px-2 text-xs text-stone-400">
                 Page {table.getState().pagination.pageIndex + 1} of{" "}
                 {table.getPageCount() || 1}
               </span>
-              <button
+              <Button
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
-                className="rounded px-2 py-1 text-xs text-stone-400 hover:bg-stone-800 disabled:opacity-30"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-stone-400"
               >
                 Next →
-              </button>
+              </Button>
             </div>
           </div>
         </div>

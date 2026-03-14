@@ -15,10 +15,7 @@ pub async fn run_traceroute(target: &str) -> String {
     };
 
     let result = tokio::time::timeout(Duration::from_secs(30), async {
-        Command::new(cmd)
-            .args(&args)
-            .output()
-            .await
+        Command::new(cmd).args(&args).output().await
     })
     .await;
 

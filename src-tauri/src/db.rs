@@ -65,6 +65,8 @@ pub struct Config {
     pub gateway_ip: Option<String>,
     pub ping_interval_s: i64,
     pub outage_threshold: i64,
+    pub notify_on_outage: bool,
+    pub notify_on_recovery: bool,
     pub speed_test_cooldown_s: i64,
     pub speed_test_schedule_s: i64,
     pub auto_speed_test_on_recovery: bool,
@@ -99,6 +101,8 @@ pub struct ConfigUpdate {
     pub gateway_ip: Option<String>,
     pub ping_interval_s: Option<i64>,
     pub outage_threshold: Option<i64>,
+    pub notify_on_outage: Option<bool>,
+    pub notify_on_recovery: Option<bool>,
     pub speed_test_cooldown_s: Option<i64>,
     pub speed_test_schedule_s: Option<i64>,
     pub auto_speed_test_on_recovery: Option<bool>,
@@ -234,9 +238,7 @@ pub async fn get_pings(
     q.fetch_all(pool).await
 }
 
-pub async fn get_last_ping_per_target(
-    pool: &SqlitePool,
-) -> Result<Vec<PingRecord>, sqlx::Error> {
+pub async fn get_last_ping_per_target(pool: &SqlitePool) -> Result<Vec<PingRecord>, sqlx::Error> {
     sqlx::query_as::<_, PingRecord>(
         "SELECT p.* FROM pings p
          INNER JOIN (SELECT target, MAX(timestamp) as max_ts FROM pings GROUP BY target) latest
@@ -332,10 +334,7 @@ pub async fn get_outages(
     q.fetch_all(pool).await
 }
 
-pub async fn get_outage_by_id(
-    pool: &SqlitePool,
-    id: i64,
-) -> Result<Option<Outage>, sqlx::Error> {
+pub async fn get_outage_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Outage>, sqlx::Error> {
     sqlx::query_as::<_, Outage>("SELECT * FROM outages WHERE id = ?")
         .bind(id)
         .fetch_optional(pool)
@@ -374,10 +373,7 @@ pub async fn get_active_outage(pool: &SqlitePool) -> Result<Option<Outage>, sqlx
 // Speed test queries
 // ---------------------------------------------------------------------------
 
-pub async fn insert_speed_test(
-    pool: &SqlitePool,
-    test: &SpeedTest,
-) -> Result<i64, sqlx::Error> {
+pub async fn insert_speed_test(pool: &SqlitePool, test: &SpeedTest) -> Result<i64, sqlx::Error> {
     retry(|| async {
         let result = sqlx::query(
             "INSERT INTO speed_tests (timestamp, download_mbps, upload_mbps, ping_ms, server_name, trigger_type, outage_id)
@@ -412,12 +408,10 @@ pub async fn get_speed_tests(
     limit: Option<i64>,
 ) -> Result<Vec<SpeedTest>, sqlx::Error> {
     let limit = limit.unwrap_or(50).min(500);
-    sqlx::query_as::<_, SpeedTest>(
-        "SELECT * FROM speed_tests ORDER BY timestamp DESC LIMIT ?",
-    )
-    .bind(limit)
-    .fetch_all(pool)
-    .await
+    sqlx::query_as::<_, SpeedTest>("SELECT * FROM speed_tests ORDER BY timestamp DESC LIMIT ?")
+        .bind(limit)
+        .fetch_all(pool)
+        .await
 }
 
 // ---------------------------------------------------------------------------
@@ -448,14 +442,10 @@ pub async fn insert_rolling_stat(
     .await
 }
 
-pub async fn get_latest_stats(
-    pool: &SqlitePool,
-) -> Result<Option<RollingStat>, sqlx::Error> {
-    sqlx::query_as::<_, RollingStat>(
-        "SELECT * FROM rolling_stats ORDER BY timestamp DESC LIMIT 1",
-    )
-    .fetch_optional(pool)
-    .await
+pub async fn get_latest_stats(pool: &SqlitePool) -> Result<Option<RollingStat>, sqlx::Error> {
+    sqlx::query_as::<_, RollingStat>("SELECT * FROM rolling_stats ORDER BY timestamp DESC LIMIT 1")
+        .fetch_optional(pool)
+        .await
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +539,12 @@ pub async fn update_config(
     if update.speed_test_cooldown_s.is_some() {
         sets.push("speed_test_cooldown_s = ?");
     }
+    if update.notify_on_outage.is_some() {
+        sets.push("notify_on_outage = ?");
+    }
+    if update.notify_on_recovery.is_some() {
+        sets.push("notify_on_recovery = ?");
+    }
     if update.speed_test_schedule_s.is_some() {
         sets.push("speed_test_schedule_s = ?");
     }
@@ -576,6 +572,8 @@ pub async fn update_config(
     let gateway_ip = update.gateway_ip.clone();
     let ping_interval_s = update.ping_interval_s;
     let outage_threshold = update.outage_threshold;
+    let notify_on_outage = update.notify_on_outage;
+    let notify_on_recovery = update.notify_on_recovery;
     let speed_test_cooldown_s = update.speed_test_cooldown_s;
     let speed_test_schedule_s = update.speed_test_schedule_s;
     let auto_speed_test_on_recovery = update.auto_speed_test_on_recovery;
@@ -599,6 +597,12 @@ pub async fn update_config(
                 q = q.bind(v);
             }
             if let Some(v) = outage_threshold {
+                q = q.bind(v);
+            }
+            if let Some(v) = notify_on_outage {
+                q = q.bind(v);
+            }
+            if let Some(v) = notify_on_recovery {
                 q = q.bind(v);
             }
             if let Some(v) = speed_test_cooldown_s {

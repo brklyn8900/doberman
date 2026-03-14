@@ -1,6 +1,7 @@
 pub mod api;
 pub mod db;
 pub mod maintenance;
+pub mod notifications;
 pub mod outage;
 pub mod ping;
 pub mod speed_test;
@@ -46,10 +47,8 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
 
-            let pool = tauri::async_runtime::block_on(async {
-                db::init_db(&app_data_dir).await
-            })
-            .expect("failed to initialize database");
+            let pool = tauri::async_runtime::block_on(async { db::init_db(&app_data_dir).await })
+                .expect("failed to initialize database");
 
             let pool = Arc::new(pool);
             handle.manage(DbPool(pool.clone()));
@@ -59,10 +58,9 @@ pub fn run() {
             let broadcaster = sse::SseBroadcaster::new();
 
             // Load initial config and wrap in RwLock for shared access
-            let initial_config = tauri::async_runtime::block_on(async {
-                db::get_config(&pool).await
-            })
-            .expect("failed to load initial config");
+            let initial_config =
+                tauri::async_runtime::block_on(async { db::get_config(&pool).await })
+                    .expect("failed to load initial config");
             let config = Arc::new(RwLock::new(initial_config));
             let speed_test_manager = Arc::new(speed_test::SpeedTestManager::new());
 
@@ -112,8 +110,8 @@ pub fn run() {
             }
 
             // Bind axum on a random available port
-            let listener = std::net::TcpListener::bind("127.0.0.1:0")
-                .expect("failed to bind API server");
+            let listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind API server");
             listener
                 .set_nonblocking(true)
                 .expect("failed to set API listener nonblocking");
@@ -153,7 +151,10 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_api_port])
+        .invoke_handler(tauri::generate_handler![
+            get_api_port,
+            notifications::send_test_notification
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

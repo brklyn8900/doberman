@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchStatsSummaryFull, exportCsv, exportReport, type StatsSummary } from "../api";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface Props {
   port: number | null;
@@ -68,24 +70,24 @@ export default function ReportExport({ port }: Props) {
     <div className="flex flex-col gap-6">
       {/* Date Range */}
       <div className="flex items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-stone-400">
-          From
-          <input
-            type="date"
+        <div className="flex flex-col gap-1 text-xs text-stone-400">
+          <span>From</span>
+          <DatePicker
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="app-input px-2 py-1.5"
+            onChange={setDateFrom}
+            placeholder="Select start"
+            ariaLabel="Report start date"
           />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-stone-400">
-          To
-          <input
-            type="date"
+        </div>
+        <div className="flex flex-col gap-1 text-xs text-stone-400">
+          <span>To</span>
+          <DatePicker
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="app-input px-2 py-1.5"
+            onChange={setDateTo}
+            placeholder="Select end"
+            ariaLabel="Report end date"
           />
-        </label>
+        </div>
       </div>
 
       {/* Preview Stats */}
@@ -119,10 +121,11 @@ export default function ReportExport({ port }: Props) {
 
       {/* Export Buttons */}
       <div className="flex gap-3">
-        <button
+        <Button
           onClick={handleExportCsv}
           disabled={exportingCsv || port === null}
-          className="app-button-secondary flex items-center gap-2"
+          variant="secondary"
+          className="flex items-center gap-2"
         >
           {exportingCsv && (
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -131,11 +134,11 @@ export default function ReportExport({ port }: Props) {
             </svg>
           )}
           Export CSV
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleExportPdf}
           disabled={exportingPdf || port === null}
-          className="app-button-primary flex items-center gap-2"
+          className="flex items-center gap-2"
         >
           {exportingPdf && (
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -144,7 +147,7 @@ export default function ReportExport({ port }: Props) {
             </svg>
           )}
           Export Report
-        </button>
+        </Button>
       </div>
     </div>
   );

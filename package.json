@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build:macos": "./scripts/tauri-build-macos.sh",
+    "tauri:build:macos:app": "./scripts/tauri-build-macos.sh --bundles app",
+    "tauri:build:windows": "npx tauri build --target x86_64-pc-windows-msvc"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
@@ -16,10 +19,11 @@
     "@tauri-apps/plugin-shell": "^2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "date-fns": "^3",
+    "date-fns": "^3.6.0",
     "lucide-react": "^0.577.0",
     "radix-ui": "^1.4.3",
     "react": "^18.3.1",
+    "react-day-picker": "^9.14.0",
     "react-dom": "^18.3.1",
     "recharts": "^2",
     "shadcn": "^4.0.6",
@@ -27,13 +31,12 @@
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10",
-    "postcss": "^8",
-    "tailwindcss": "^3",
+    "tailwindcss": "^4.2.1",
     "typescript": "^5.6.3",
     "vite": "^6.0.3"
   }
