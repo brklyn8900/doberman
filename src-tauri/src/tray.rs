@@ -1,13 +1,11 @@
 use tauri::{
-    image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     AppHandle, Manager,
 };
-fn app_icon() -> Image<'static> {
-    Image::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/icon.png"))
-        .expect("failed to load tray icon")
-        .to_owned()
+
+fn app_icon(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
+    app.default_window_icon().cloned().map(|icon| icon.to_owned())
 }
 
 /// Build the tray menu with the given status text.
@@ -36,8 +34,12 @@ fn build_tray_menu(app: &AppHandle, status_text: &str) -> tauri::Result<Menu<tau
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let menu = build_tray_menu(app, "Status: Connected")?;
 
-    TrayIconBuilder::with_id("main")
-        .icon(app_icon())
+    let mut builder = TrayIconBuilder::with_id("main");
+    if let Some(icon) = app_icon(app) {
+        builder = builder.icon(icon);
+    }
+
+    builder
         .menu(&menu)
         .show_menu_on_left_click(true)
         .tooltip("Doberman - Connected")
@@ -71,7 +73,9 @@ pub fn update_tray_status(app: &AppHandle, is_connected: bool) {
         ("Doberman - Outage Detected", "Status: Outage Detected")
     };
 
-    let _ = tray.set_icon(Some(app_icon()));
+    if let Some(icon) = app_icon(app) {
+        let _ = tray.set_icon(Some(icon));
+    }
     let _ = tray.set_tooltip(Some(tooltip));
 
     if let Ok(menu) = build_tray_menu(app, status_text) {
