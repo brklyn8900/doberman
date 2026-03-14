@@ -28,15 +28,11 @@ export default function SpeedTestPanel({
   lastSpeedTestResult,
 }: Props) {
   const { data, refetch } = useSpeedTests(port);
-  const [running, setRunning] = useState(false);
+  const [manualRunPending, setManualRunPending] = useState(false);
   const [lastResult, setLastResult] = useState<SpeedTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
-
-  // Sync SSE running state
-  useEffect(() => {
-    setRunning(speedTestRunning);
-  }, [speedTestRunning]);
+  const running = manualRunPending || speedTestRunning;
 
   // When SSE delivers a result, refresh history and show it
   useEffect(() => {
@@ -50,7 +46,7 @@ export default function SpeedTestPanel({
         server_name: lastSpeedTestResult.server_name,
         trigger: lastSpeedTestResult.trigger,
       });
-      setRunning(false);
+      setManualRunPending(false);
       setCooldown(COOLDOWN_S);
       refetch();
     }
@@ -65,7 +61,7 @@ export default function SpeedTestPanel({
 
   const handleRun = useCallback(async () => {
     if (!port || running || cooldown > 0) return;
-    setRunning(true);
+    setManualRunPending(true);
     setError(null);
     try {
       const result = await triggerSpeedTest(port);
@@ -75,7 +71,7 @@ export default function SpeedTestPanel({
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setRunning(false);
+      setManualRunPending(false);
     }
   }, [port, running, cooldown, refetch]);
 
@@ -92,15 +88,15 @@ export default function SpeedTestPanel({
   return (
     <div className="flex flex-col gap-4">
       {/* Run button + last result */}
-      <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+      <div className="app-panel p-5">
         <div className="flex items-center gap-4">
           <button
             onClick={handleRun}
             disabled={running || cooldown > 0 || !port}
-            className={`rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${
+            className={`rounded-xl px-5 py-2.5 text-sm font-medium transition-colors ${
               running || cooldown > 0
-                ? "cursor-not-allowed bg-gray-700 text-gray-400"
-                : "bg-blue-600 text-white hover:bg-blue-500"
+                ? "cursor-not-allowed border border-stone-700 bg-stone-800 text-stone-500"
+                : "bg-stone-100 text-stone-900 hover:bg-stone-200"
             }`}
           >
             {running ? (
@@ -134,35 +130,35 @@ export default function SpeedTestPanel({
           </button>
 
           {error && (
-            <span className="text-sm text-red-400">{error}</span>
+            <span className="text-sm text-rose-300">{error}</span>
           )}
         </div>
 
         {lastResult && (
-          <div className="mt-4 grid grid-cols-4 gap-4">
-            <div className="rounded bg-gray-800 p-3 text-center">
-              <div className="text-2xl font-bold text-green-400">
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-stone-800 bg-stone-950/80 p-3 text-center">
+              <div className="text-2xl font-bold text-emerald-300">
                 {lastResult.download_mbps.toFixed(1)}
               </div>
-              <div className="text-xs text-gray-400">Download Mbps</div>
+              <div className="text-xs text-stone-500">Download Mbps</div>
             </div>
-            <div className="rounded bg-gray-800 p-3 text-center">
-              <div className="text-2xl font-bold text-blue-400">
+            <div className="rounded-2xl border border-stone-800 bg-stone-950/80 p-3 text-center">
+              <div className="text-2xl font-bold text-stone-100">
                 {lastResult.upload_mbps.toFixed(1)}
               </div>
-              <div className="text-xs text-gray-400">Upload Mbps</div>
+              <div className="text-xs text-stone-500">Upload Mbps</div>
             </div>
-            <div className="rounded bg-gray-800 p-3 text-center">
-              <div className="text-2xl font-bold text-yellow-400">
+            <div className="rounded-2xl border border-stone-800 bg-stone-950/80 p-3 text-center">
+              <div className="text-2xl font-bold text-amber-300">
                 {lastResult.ping_ms.toFixed(0)}
               </div>
-              <div className="text-xs text-gray-400">Ping ms</div>
+              <div className="text-xs text-stone-500">Ping ms</div>
             </div>
-            <div className="rounded bg-gray-800 p-3 text-center">
-              <div className="truncate text-sm font-medium text-gray-300">
-                {lastResult.server_name}
+            <div className="rounded-2xl border border-stone-800 bg-stone-950/80 p-3 text-center">
+              <div className="truncate text-sm font-medium text-stone-200">
+                {lastResult.server_name ?? "Unknown server"}
               </div>
-              <div className="text-xs text-gray-400">Server</div>
+              <div className="text-xs text-stone-500">Server</div>
             </div>
           </div>
         )}
@@ -170,40 +166,40 @@ export default function SpeedTestPanel({
 
       {/* Chart */}
       {chartData.length > 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <h3 className="mb-3 text-sm font-medium text-gray-300">
+        <div className="app-panel p-5">
+          <h3 className="mb-3 text-sm font-medium text-stone-300">
             Speed History
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#44403c" />
               <XAxis
                 dataKey="time"
-                tick={{ fill: "#9ca3af", fontSize: 11 }}
-                tickLine={{ stroke: "#4b5563" }}
+                tick={{ fill: "#a8a29e", fontSize: 11 }}
+                tickLine={{ stroke: "#57534e" }}
               />
               <YAxis
-                tick={{ fill: "#9ca3af", fontSize: 11 }}
-                tickLine={{ stroke: "#4b5563" }}
+                tick={{ fill: "#a8a29e", fontSize: 11 }}
+                tickLine={{ stroke: "#57534e" }}
                 label={{
                   value: "Mbps",
                   angle: -90,
                   position: "insideLeft",
-                  fill: "#6b7280",
+                  fill: "#78716c",
                   fontSize: 11,
                 }}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1f2937",
-                  border: "1px solid #374151",
-                  borderRadius: 6,
-                  color: "#e5e7eb",
+                  backgroundColor: "#1c1917",
+                  border: "1px solid #44403c",
+                  borderRadius: 12,
+                  color: "#fafaf9",
                 }}
               />
-              <Legend wrapperStyle={{ color: "#9ca3af", fontSize: 12 }} />
+              <Legend wrapperStyle={{ color: "#a8a29e", fontSize: 12 }} />
               <Bar dataKey="Download" fill="#34d399" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="Upload" fill="#60a5fa" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="Upload" fill="#d6d3d1" radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -211,14 +207,14 @@ export default function SpeedTestPanel({
 
       {/* History table */}
       {tests.length > 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <h3 className="mb-3 text-sm font-medium text-gray-300">
+        <div className="app-panel p-5">
+          <h3 className="mb-3 text-sm font-medium text-stone-300">
             Test History
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-700 text-xs text-gray-400">
+                <tr className="border-b border-stone-800 text-xs text-stone-500">
                   <th className="pb-2 pr-4">Timestamp</th>
                   <th className="pb-2 pr-4 text-right">Download</th>
                   <th className="pb-2 pr-4 text-right">Upload</th>
@@ -230,9 +226,9 @@ export default function SpeedTestPanel({
                 {tests.map((t) => (
                   <tr
                     key={t.id}
-                    className="border-b border-gray-800/50 text-gray-300"
+                    className="border-b border-stone-800/60 text-stone-300"
                   >
-                    <td className="py-1.5 pr-4 text-xs text-gray-400">
+                    <td className="py-1.5 pr-4 text-xs text-stone-500">
                       {format(new Date(t.timestamp), "yyyy-MM-dd HH:mm:ss")}
                     </td>
                     <td className="py-1.5 pr-4 text-right font-mono">
@@ -245,7 +241,7 @@ export default function SpeedTestPanel({
                       {t.ping_ms.toFixed(0)}
                     </td>
                     <td className="py-1.5">
-                      <span className="rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400">
+                      <span className="app-chip">
                         {t.trigger}
                       </span>
                     </td>
@@ -258,8 +254,8 @@ export default function SpeedTestPanel({
       )}
 
       {tests.length === 0 && !lastResult && (
-        <div className="flex items-center justify-center rounded-lg border border-gray-800 bg-gray-900 p-8">
-          <p className="text-sm text-gray-500">
+        <div className="app-panel flex items-center justify-center p-8">
+          <p className="text-sm text-stone-500">
             No speed test results yet. Run a test to get started.
           </p>
         </div>

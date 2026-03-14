@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { getApiPort } from "./api";
+import { useState, useEffect, useRef } from "react";
+import { getApiPort, waitForApi } from "./api";
 import { useSSE } from "./hooks/useSSE";
 import StatusBanner from "./components/StatusBanner";
 import LiveChart from "./components/LiveChart";
@@ -10,8 +10,18 @@ import HeatmapView from "./components/HeatmapView";
 import ReportExport from "./components/ReportExport";
 import SettingsPanel from "./components/SettingsPanel";
 import DebugPanel from "./components/DebugPanel";
+import HelpPanel from "./components/HelpPanel";
+import dobermanLogo from "../images/doberman-logo.png";
 
-type View = "dashboard" | "outages" | "speed-tests" | "heatmap" | "reports" | "settings" | "debug";
+type View =
+  | "dashboard"
+  | "outages"
+  | "speed-tests"
+  | "heatmap"
+  | "reports"
+  | "settings"
+  | "debug"
+  | "help";
 
 const NAV_ITEMS: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -21,50 +31,144 @@ const NAV_ITEMS: { id: View; label: string }[] = [
   { id: "reports", label: "Reports" },
   { id: "settings", label: "Settings" },
   { id: "debug", label: "Debug" },
+  { id: "help", label: "Help" },
 ];
+
+const PRIMARY_NAV: View[] = [
+  "dashboard",
+  "outages",
+  "speed-tests",
+  "heatmap",
+  "reports",
+];
+
+const SECONDARY_NAV: View[] = ["settings", "help", "debug"];
 
 function App() {
   const [view, setView] = useState<View>("dashboard");
   const [port, setPort] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     getApiPort()
-      .then(setPort)
+      .then(async (apiPort) => {
+        await waitForApi(apiPort);
+        if (!cancelled) {
+          setPort(apiPort);
+        }
+      })
       .catch((err) => {
-        console.error("Failed to get API port:", err);
+        console.error("Failed to initialize API connection:", err);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const sse = useSSE(port);
+  const connectedPill = sse.connected
+    ? "bg-emerald-400"
+    : "bg-stone-600";
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  const navLabel = (id: View) =>
+    NAV_ITEMS.find((item) => item.id === id)?.label ?? id;
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100">
-      {/* Sidebar */}
-      <nav className="flex w-56 flex-col gap-1 border-r border-gray-800 bg-gray-900 p-4">
-        <h1 className="mb-6 text-xl font-bold tracking-tight">Doberman</h1>
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setView(item.id)}
-            className={`rounded px-3 py-2 text-left text-sm transition-colors ${
-              view === item.id
-                ? "bg-gray-800 font-medium text-white"
-                : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-        <div className="mt-auto flex items-center gap-2 pt-4 text-xs text-gray-600">
-          <div
-            className={`h-1.5 w-1.5 rounded-full ${sse.connected ? "bg-green-500" : "bg-gray-600"}`}
-          />
-          {sse.connected ? "Connected" : "Disconnected"}
-        </div>
-      </nav>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/90 p-1 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              <img
+                src={dobermanLogo}
+                alt="Doberman logo"
+                className="h-full w-full object-contain"
+              />
+            </div>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-6">
+            <div>
+              <div className="app-brand-kicker">Local Monitor</div>
+              <h1 className="app-brand-title">Doberman</h1>
+              <p className="app-brand-copy">
+                Track connectivity, latency, outages, and recovery from one local dashboard.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 lg:items-end">
+            <nav className="app-nav">
+              {PRIMARY_NAV.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setView(id);
+                    setMenuOpen(false);
+                  }}
+                  className={`app-nav-button ${view === id ? "app-nav-button-active" : ""}`}
+                >
+                  {navLabel(id)}
+                </button>
+              ))}
+
+              <div ref={menuRef} className="relative">
+                <button
+                  onClick={() => setMenuOpen((open) => !open)}
+                  className={`app-nav-button ${SECONDARY_NAV.includes(view) ? "app-nav-button-active" : ""}`}
+                >
+                  More
+                </button>
+
+                {menuOpen && (
+                  <div className="app-menu">
+                    {SECONDARY_NAV.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => {
+                          setView(id);
+                          setMenuOpen(false);
+                        }}
+                        className={`app-menu-item ${view === id ? "app-menu-item-active" : ""}`}
+                      >
+                        {navLabel(id)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </nav>
+
+            <div className="flex flex-wrap gap-2">
+              <div className="app-status-pill">
+                <div className={`h-2 w-2 rounded-full ${connectedPill}`} />
+                {sse.connected ? "Live connection" : "Starting local API"}
+              </div>
+              <div className="app-status-pill">
+                Status: <span className="font-medium capitalize text-stone-100">{sse.status}</span>
+              </div>
+              <div className="app-status-pill">
+                Port: <span className="font-medium text-stone-100">{port ?? "..."}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6">
         {view === "dashboard" && (
           <div className="flex flex-col gap-4">
             <StatusBanner
@@ -118,6 +222,16 @@ function App() {
           <div className="flex flex-col gap-4">
             <h2 className="text-lg font-semibold">Debug</h2>
             <DebugPanel port={port} sse={sse} />
+          </div>
+        )}
+        {view === "help" && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-lg font-semibold">Help</h2>
+            <HelpPanel
+              connected={sse.connected}
+              port={port}
+              status={sse.status}
+            />
           </div>
         )}
       </main>

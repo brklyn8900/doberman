@@ -14,6 +14,7 @@ use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::db::{self, Config, OutageQueryParams, PingQueryParams};
+use crate::speed_test::SpeedTestManager;
 use crate::sse::{self, SseBroadcaster};
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,7 @@ pub struct AppState {
     pub db: Arc<SqlitePool>,
     pub broadcaster: SseBroadcaster,
     pub config: Arc<RwLock<Config>>,
+    pub speed_test_manager: Arc<SpeedTestManager>,
 }
 
 // ---------------------------------------------------------------------------
@@ -248,55 +250,36 @@ async fn get_speed_tests(
 async fn run_speed_test(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Check cooldown: reject if a speed test was run recently
     let config = state.config.read().await;
-    let cooldown_s = config.speed_test_cooldown_s;
+    let cooldown_s = config.speed_test_cooldown_s as u64;
     drop(config);
 
-    let cutoff = (Utc::now() - chrono::Duration::seconds(cooldown_s)).to_rfc3339();
-    let recent: Option<db::SpeedTest> = sqlx::query_as(
-        "SELECT * FROM speed_tests WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT 1",
-    )
-    .bind(&cutoff)
-    .fetch_optional(state.db.as_ref())
-    .await?;
-
-    if recent.is_some() {
-        return Ok((
+    match state
+        .speed_test_manager
+        .trigger_test(
+            state.db.as_ref(),
+            &state.broadcaster,
+            cooldown_s,
+            "manual",
+            None,
+        )
+        .await
+    {
+        Ok(test) => Ok((StatusCode::OK, Json(test)).into_response()),
+        Err(error) if error.contains("cooldown") || error.contains("already running") => Ok((
             StatusCode::TOO_MANY_REQUESTS,
             Json(serde_json::json!({
-                "error": "Speed test cooldown active",
+                "error": error,
                 "cooldown_s": cooldown_s,
             })),
         )
-            .into_response());
+            .into_response()),
+        Err(error) => Ok((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": error })),
+        )
+            .into_response()),
     }
-
-    // Insert a placeholder speed test record (actual measurement is a stub for now)
-    let now = Utc::now().to_rfc3339();
-    let test = db::SpeedTest {
-        id: None,
-        timestamp: now,
-        download_mbps: 0.0,
-        upload_mbps: 0.0,
-        ping_ms: 0.0,
-        server_name: None,
-        trigger_type: "manual".to_string(),
-        outage_id: None,
-    };
-    let id = db::insert_speed_test(&state.db, &test).await?;
-
-    state.broadcaster.send(crate::sse::SseEvent::SpeedTestStart {
-        test_id: id,
-        trigger: "manual".to_string(),
-        timestamp: Utc::now().to_rfc3339(),
-    });
-
-    Ok((
-        StatusCode::ACCEPTED,
-        Json(serde_json::json!({ "id": id, "status": "started" })),
-    )
-        .into_response())
 }
 
 // ---------------------------------------------------------------------------

@@ -33,9 +33,9 @@ function formatTime(iso: string | null): string {
 }
 
 const causeBadgeColor: Record<string, string> = {
-  isp: "bg-red-900/50 text-red-300 border-red-700",
-  local: "bg-yellow-900/50 text-yellow-300 border-yellow-700",
-  unknown: "bg-gray-700/50 text-gray-300 border-gray-600",
+  isp: "border border-rose-900 bg-rose-950/50 text-rose-200",
+  local: "border border-amber-900 bg-amber-950/50 text-amber-200",
+  unknown: "border border-stone-700 bg-stone-900/70 text-stone-300",
 };
 
 function CauseBadge({ cause }: { cause: string }) {
@@ -108,7 +108,7 @@ export default function OutageTable({ port }: Props) {
           const val = info.getValue();
           if (!val) return "—";
           const targets = val.split(",").map((t) => t.trim());
-          return <span className="text-xs text-gray-400">{targets.length}</span>;
+          return <span className="text-xs text-stone-400">{targets.length}</span>;
         },
       }),
       columnHelper.display({
@@ -120,7 +120,7 @@ export default function OutageTable({ port }: Props) {
               e.stopPropagation();
               row.toggleExpanded();
             }}
-            className="text-xs text-gray-500 hover:text-gray-300"
+            className="text-xs text-stone-500 hover:text-stone-300"
           >
             {row.getIsExpanded() ? "▾" : "▸"}
           </button>
@@ -147,30 +147,30 @@ export default function OutageTable({ port }: Props) {
     <div className="flex flex-col gap-4">
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
+        <label className="flex flex-col gap-1 text-xs text-stone-400">
           From
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-100"
+            className="app-input px-2 py-1.5"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
+        <label className="flex flex-col gap-1 text-xs text-stone-400">
           To
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-100"
+            className="app-input px-2 py-1.5"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
+        <label className="flex flex-col gap-1 text-xs text-stone-400">
           Cause
           <select
             value={causeFilter}
             onChange={(e) => setCauseFilter(e.target.value)}
-            className="rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-100"
+            className="app-input px-2 py-1.5"
           >
             <option value="">All</option>
             <option value="isp">ISP</option>
@@ -178,7 +178,7 @@ export default function OutageTable({ port }: Props) {
             <option value="unknown">Unknown</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
+        <label className="flex flex-col gap-1 text-xs text-stone-400">
           Min Duration (min)
           <input
             type="number"
@@ -187,25 +187,25 @@ export default function OutageTable({ port }: Props) {
             value={minDuration}
             onChange={(e) => setMinDuration(e.target.value)}
             placeholder="0"
-            className="w-24 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-100"
+            className="app-input w-24 px-2 py-1.5"
           />
         </label>
       </div>
 
       {/* Table */}
-      {loading && <p className="text-sm text-gray-500">Loading outages…</p>}
-      {error && <p className="text-sm text-red-400">Error: {error}</p>}
+      {loading && <p className="text-sm text-stone-500">Loading outages…</p>}
+      {error && <p className="text-sm text-rose-300">Error: {error}</p>}
       {!loading && !error && (
-        <div className="overflow-x-auto rounded border border-gray-800">
+        <div className="app-panel overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="border-b border-gray-800 bg-gray-900">
+                <tr key={hg.id} className="border-b border-stone-800 bg-stone-900/80">
                   {hg.headers.map((header) => (
                     <th
                       key={header.id}
                       onClick={header.column.getToggleSortingHandler()}
-                      className="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium text-gray-400 hover:text-gray-200"
+                      className="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium text-stone-400 hover:text-stone-200"
                     >
                       <div className="flex items-center gap-1">
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -223,7 +223,7 @@ export default function OutageTable({ port }: Props) {
                 <tr>
                   <td
                     colSpan={columns.length}
-                    className="px-3 py-8 text-center text-gray-500"
+                    className="px-3 py-8 text-center text-stone-500"
                   >
                     No outages found
                   </td>
@@ -234,7 +234,7 @@ export default function OutageTable({ port }: Props) {
                   <tr
                     key={row.id}
                     onClick={() => row.toggleExpanded()}
-                    className="cursor-pointer border-b border-gray-800/50 hover:bg-gray-800/30"
+                    className="cursor-pointer border-b border-stone-800/60 hover:bg-stone-800/30"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-3 py-2">
@@ -243,19 +243,19 @@ export default function OutageTable({ port }: Props) {
                     ))}
                   </tr>
                   {row.getIsExpanded() && (
-                    <tr key={`${row.id}-expanded`} className="border-b border-gray-800/50">
-                      <td colSpan={columns.length} className="bg-gray-900/50 px-4 py-3">
+                    <tr key={`${row.id}-expanded`} className="border-b border-stone-800/60">
+                      <td colSpan={columns.length} className="bg-stone-950/60 px-4 py-3">
                         <div className="flex flex-col gap-2">
-                          <div className="text-xs text-gray-400">
-                            <span className="font-medium text-gray-300">Targets:</span>{" "}
+                          <div className="text-xs text-stone-400">
+                            <span className="font-medium text-stone-300">Targets:</span>{" "}
                             {row.original.targets_down || "—"}
                           </div>
                           {row.original.traceroute && (
                             <div>
-                              <p className="mb-1 text-xs font-medium text-gray-300">
+                              <p className="mb-1 text-xs font-medium text-stone-300">
                                 Traceroute
                               </p>
-                              <pre className="max-h-60 overflow-auto rounded bg-gray-950 p-3 text-xs text-gray-400">
+                              <pre className="max-h-60 overflow-auto rounded-2xl border border-stone-800 bg-stone-950 p-3 text-xs text-stone-400">
                                 {row.original.traceroute}
                               </pre>
                             </div>
@@ -270,8 +270,8 @@ export default function OutageTable({ port }: Props) {
           </table>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between border-t border-gray-800 bg-gray-900 px-3 py-2">
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center justify-between border-t border-stone-800 bg-stone-900/80 px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-stone-400">
               <span>Rows per page:</span>
               <select
                 value={pageSize}
@@ -279,7 +279,7 @@ export default function OutageTable({ port }: Props) {
                   setPageSize(Number(e.target.value));
                   table.setPageSize(Number(e.target.value));
                 }}
-                className="rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-xs text-gray-100"
+                className="rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-xs text-stone-100"
               >
                 {[10, 25, 50].map((size) => (
                   <option key={size} value={size}>
@@ -295,18 +295,18 @@ export default function OutageTable({ port }: Props) {
               <button
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
-                className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800 disabled:opacity-30"
+                className="rounded px-2 py-1 text-xs text-stone-400 hover:bg-stone-800 disabled:opacity-30"
               >
                 ← Prev
               </button>
-              <span className="px-2 text-xs text-gray-400">
+              <span className="px-2 text-xs text-stone-400">
                 Page {table.getState().pagination.pageIndex + 1} of{" "}
                 {table.getPageCount() || 1}
               </span>
               <button
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
-                className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800 disabled:opacity-30"
+                className="rounded px-2 py-1 text-xs text-stone-400 hover:bg-stone-800 disabled:opacity-30"
               >
                 Next →
               </button>

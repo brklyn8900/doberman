@@ -124,25 +124,24 @@ export default function SettingsPanel({ port }: Props) {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-gray-500">
+      <div className="flex h-64 items-center justify-center text-stone-500">
         Loading settings...
       </div>
     );
   }
 
-  const inputClass =
-    "w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-blue-500 focus:outline-none";
-  const labelClass = "block text-sm font-medium text-gray-300 mb-1";
+  const inputClass = "app-input";
+  const labelClass = "mb-1 block text-sm font-medium text-stone-300";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       {/* Message toast */}
       {message && (
         <div
-          className={`rounded px-4 py-2 text-sm ${
+          className={`rounded-2xl px-4 py-2 text-sm ${
             message.type === "success"
-              ? "bg-green-900/50 text-green-300 border border-green-800"
-              : "bg-red-900/50 text-red-300 border border-red-800"
+              ? "border border-emerald-900 bg-emerald-950/50 text-emerald-200"
+              : "border border-rose-900 bg-rose-950/50 text-rose-200"
           }`}
         >
           {message.text}
@@ -150,8 +149,8 @@ export default function SettingsPanel({ port }: Props) {
       )}
 
       {/* Ping Targets */}
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">Ping Targets</h3>
+      <section className="app-panel p-5">
+        <h3 className="mb-3 text-sm font-semibold text-stone-200">Ping Targets</h3>
         <div className="space-y-2">
           {targets.map((t, i) => (
             <div key={i} className="flex gap-2">
@@ -165,7 +164,7 @@ export default function SettingsPanel({ port }: Props) {
               <button
                 onClick={() => removeTarget(i)}
                 disabled={targets.length <= 2}
-                className="shrink-0 rounded border border-gray-700 px-2 text-sm text-gray-400 hover:text-red-400 disabled:opacity-30"
+                className="app-button-secondary shrink-0 px-3 text-stone-400 hover:text-rose-300"
               >
                 Remove
               </button>
@@ -174,15 +173,15 @@ export default function SettingsPanel({ port }: Props) {
         </div>
         <button
           onClick={addTarget}
-          className="mt-2 rounded border border-gray-700 px-3 py-1 text-sm text-gray-300 hover:bg-gray-800"
+          className="app-button-secondary mt-2 px-3 py-1"
         >
           + Add Target
         </button>
       </section>
 
       {/* Gateway */}
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">Gateway</h3>
+      <section className="app-panel p-5">
+        <h3 className="mb-3 text-sm font-semibold text-stone-200">Gateway</h3>
         <div className="flex gap-2">
           <div className="flex-1">
             <label className={labelClass}>Gateway IP</label>
@@ -196,7 +195,7 @@ export default function SettingsPanel({ port }: Props) {
           </div>
           <button
             onClick={() => setGatewayIp("")}
-            className="mt-6 shrink-0 rounded border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            className="app-button-secondary mt-6 shrink-0"
           >
             Auto-detect
           </button>
@@ -204,8 +203,8 @@ export default function SettingsPanel({ port }: Props) {
       </section>
 
       {/* Monitoring */}
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">Monitoring</h3>
+      <section className="app-panel p-5">
+        <h3 className="mb-3 text-sm font-semibold text-stone-200">Monitoring</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Ping interval (seconds)</label>
@@ -233,8 +232,8 @@ export default function SettingsPanel({ port }: Props) {
       </section>
 
       {/* Speed Tests */}
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">Speed Tests</h3>
+      <section className="app-panel p-5">
+        <h3 className="mb-3 text-sm font-semibold text-stone-200">Speed Tests</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Cooldown (seconds)</label>
@@ -262,23 +261,23 @@ export default function SettingsPanel({ port }: Props) {
           <button
             onClick={() => setAutoSpeedTestOnRecovery(!autoSpeedTestOnRecovery)}
             className={`relative h-6 w-11 rounded-full transition-colors ${
-              autoSpeedTestOnRecovery ? "bg-blue-600" : "bg-gray-600"
+              autoSpeedTestOnRecovery ? "bg-stone-100" : "bg-stone-700"
             }`}
           >
             <span
-              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full ${autoSpeedTestOnRecovery ? "bg-stone-900" : "bg-stone-300"} transition-transform ${
                 autoSpeedTestOnRecovery ? "translate-x-5" : ""
               }`}
             />
           </button>
-          <span className="text-sm text-gray-300">Auto speed test on recovery</span>
+          <span className="text-sm text-stone-300">Auto speed test on recovery</span>
         </div>
       </section>
 
       {/* Advertised Speeds */}
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">Advertised Speeds</h3>
-        <p className="mb-3 text-xs text-gray-500">
+      <section className="app-panel p-5">
+        <h3 className="mb-3 text-sm font-semibold text-stone-200">Advertised Speeds</h3>
+        <p className="mb-3 text-xs text-stone-500">
           Your ISP-advertised speeds, used for comparison in reports
         </p>
         <div className="grid grid-cols-2 gap-4">
@@ -310,8 +309,8 @@ export default function SettingsPanel({ port }: Props) {
       </section>
 
       {/* Data & Appearance */}
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">Data & Appearance</h3>
+      <section className="app-panel p-5">
+        <h3 className="mb-3 text-sm font-semibold text-stone-200">Data & Appearance</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Data retention (days)</label>
@@ -329,20 +328,20 @@ export default function SettingsPanel({ port }: Props) {
             <div className="flex gap-2">
               <button
                 onClick={() => setTheme("dark")}
-                className={`flex-1 rounded border px-3 py-2 text-sm transition-colors ${
+                className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
                   theme === "dark"
-                    ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                    : "border-gray-700 text-gray-400 hover:bg-gray-800"
+                    ? "border-stone-500 bg-stone-100 text-stone-900"
+                    : "border-stone-700 text-stone-400 hover:bg-stone-800"
                 }`}
               >
                 Dark
               </button>
               <button
                 onClick={() => setTheme("light")}
-                className={`flex-1 rounded border px-3 py-2 text-sm transition-colors ${
+                className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
                   theme === "light"
-                    ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                    : "border-gray-700 text-gray-400 hover:bg-gray-800"
+                    ? "border-stone-500 bg-stone-100 text-stone-900"
+                    : "border-stone-700 text-stone-400 hover:bg-stone-800"
                 }`}
               >
                 Light
@@ -357,7 +356,7 @@ export default function SettingsPanel({ port }: Props) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          className="app-button-primary px-6"
         >
           {saving ? "Saving..." : "Save Settings"}
         </button>

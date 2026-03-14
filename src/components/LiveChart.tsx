@@ -24,12 +24,12 @@ interface ChartPoint {
 }
 
 const TARGET_COLORS = [
-  "#3b82f6", // blue
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#06b6d4", // cyan
+  "#d6d3d1",
+  "#a8a29e",
+  "#f59e0b",
+  "#34d399",
+  "#fda4af",
+  "#7dd3fc",
 ];
 
 export default function LiveChart({ pingHistory, outageRanges }: LiveChartProps) {
@@ -81,46 +81,46 @@ export default function LiveChart({ pingHistory, outageRanges }: LiveChartProps)
 
   if (data.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-lg border border-gray-700 bg-gray-800/50 text-gray-500">
+      <div className="app-panel flex h-64 items-center justify-center text-stone-500">
         Waiting for ping data…
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-4">
-      <h3 className="mb-3 text-sm font-medium text-gray-400">
+    <div className="app-panel p-5">
+      <h3 className="mb-3 text-sm font-medium text-stone-300">
         Latency (last 10 minutes)
       </h3>
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#44403c" />
           <XAxis
             dataKey="timeLabel"
-            stroke="#6b7280"
-            tick={{ fill: "#9ca3af", fontSize: 11 }}
+            stroke="#78716c"
+            tick={{ fill: "#a8a29e", fontSize: 11 }}
             interval="preserveStartEnd"
           />
           <YAxis
-            stroke="#6b7280"
-            tick={{ fill: "#9ca3af", fontSize: 11 }}
+            stroke="#78716c"
+            tick={{ fill: "#a8a29e", fontSize: 11 }}
             label={{
               value: "ms",
               angle: -90,
               position: "insideLeft",
-              fill: "#9ca3af",
+              fill: "#a8a29e",
               fontSize: 11,
             }}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: "#1f2937",
-              border: "1px solid #374151",
-              borderRadius: "0.375rem",
-              color: "#e5e7eb",
+              backgroundColor: "#1c1917",
+              border: "1px solid #44403c",
+              borderRadius: "0.75rem",
+              color: "#fafaf9",
               fontSize: 12,
             }}
-            labelStyle={{ color: "#9ca3af" }}
+            labelStyle={{ color: "#a8a29e" }}
           />
           {outageAreas.map((area, i) => (
             <ReferenceArea
@@ -152,7 +152,7 @@ export default function LiveChart({ pingHistory, outageRanges }: LiveChartProps)
               className="h-2 w-2 rounded-full"
               style={{ backgroundColor: TARGET_COLORS[i % TARGET_COLORS.length] }}
             />
-            <span className="text-gray-400">{target}</span>
+            <span className="text-stone-400">{target}</span>
           </div>
         ))}
       </div>

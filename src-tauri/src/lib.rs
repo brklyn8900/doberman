@@ -64,6 +64,7 @@ pub fn run() {
             })
             .expect("failed to load initial config");
             let config = Arc::new(RwLock::new(initial_config));
+            let speed_test_manager = Arc::new(speed_test::SpeedTestManager::new());
 
             // Spawn the ping loop
             {
@@ -89,8 +90,15 @@ pub fn run() {
                 let pool = pool.clone();
                 let broadcaster = broadcaster.clone();
                 let config = config.clone();
+                let speed_test_manager = speed_test_manager.clone();
                 tauri::async_runtime::spawn(async move {
-                    speed_test::start_scheduled_speed_test_loop(pool, broadcaster, config).await;
+                    speed_test::start_scheduled_speed_test_loop(
+                        pool,
+                        broadcaster,
+                        config,
+                        speed_test_manager,
+                    )
+                    .await;
                 });
             }
 
@@ -106,6 +114,9 @@ pub fn run() {
             // Bind axum on a random available port
             let listener = std::net::TcpListener::bind("127.0.0.1:0")
                 .expect("failed to bind API server");
+            listener
+                .set_nonblocking(true)
+                .expect("failed to set API listener nonblocking");
             let port = listener.local_addr().unwrap().port();
             tracing::info!("API server will listen on http://127.0.0.1:{}", port);
 
@@ -117,6 +128,7 @@ pub fn run() {
                 db: pool,
                 broadcaster,
                 config,
+                speed_test_manager,
             };
             tauri::async_runtime::spawn(async move {
                 let router = api::create_router(app_state);

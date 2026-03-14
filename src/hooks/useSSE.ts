@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { getApiBaseUrl } from "../api";
 
 export interface PingResultEvent {
   type: "ping_result";
@@ -53,7 +54,7 @@ export interface SpeedTestResultEvent {
   download_mbps: number;
   upload_mbps: number;
   ping_ms: number;
-  server_name: string;
+  server_name: string | null;
   trigger: string;
 }
 
@@ -122,11 +123,12 @@ export function useSSE(port: number | null): SSEState {
     if (port === null) return;
 
     let unmounted = false;
+    const eventsUrl = `${getApiBaseUrl(port)}/api/events`;
 
     function connect() {
       if (unmounted) return;
 
-      const es = new EventSource(`http://localhost:${port}/api/events`);
+      const es = new EventSource(eventsUrl);
       esRef.current = es;
 
       es.onopen = () => {

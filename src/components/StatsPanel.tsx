@@ -23,18 +23,17 @@ function formatDuration(seconds: number | null): string {
 }
 
 function uptimeColor(pct: number): string {
-  if (pct >= 99.9) return "text-green-400";
-  if (pct >= 99) return "text-yellow-400";
-  return "text-red-400";
+  if (pct >= 99.9) return "text-emerald-300";
+  if (pct >= 99) return "text-amber-300";
+  return "text-rose-300";
 }
 
 function cardBg(color: string): string {
-  if (color.includes("green")) return "bg-green-950/30";
-  if (color.includes("yellow")) return "bg-yellow-950/30";
-  if (color.includes("red")) return "bg-red-950/30";
-  if (color.includes("blue")) return "bg-blue-950/30";
-  if (color.includes("purple")) return "bg-purple-950/30";
-  return "bg-gray-800/50";
+  if (color.includes("emerald")) return "bg-emerald-950/30";
+  if (color.includes("amber")) return "bg-amber-950/30";
+  if (color.includes("rose")) return "bg-rose-950/30";
+  if (color.includes("stone")) return "bg-stone-800/80";
+  return "bg-stone-900/60";
 }
 
 function buildCards(
@@ -64,33 +63,33 @@ function buildCards(
     {
       label: "MTBF",
       value: formatDuration(summary.mtbf_s),
-      color: "text-blue-400",
+      color: "text-stone-100",
     },
     {
       label: "MTTR",
       value: formatDuration(summary.mttr_s),
-      color: "text-purple-400",
+      color: "text-stone-300",
     },
     {
       label: "Outages Today",
       value: String(summary.outage_count_today),
       color:
-        summary.outage_count_today === 0 ? "text-green-400" : "text-red-400",
+        summary.outage_count_today === 0 ? "text-emerald-300" : "text-rose-300",
     },
     {
       label: "Jitter",
       value: `${jitter.toFixed(1)} ms`,
-      color: jitter < 5 ? "text-green-400" : "text-yellow-400",
+      color: jitter < 5 ? "text-emerald-300" : "text-amber-300",
     },
     {
       label: "Packet Loss",
       value: `${pktLoss.toFixed(2)}%`,
-      color: pktLoss < 1 ? "text-green-400" : "text-red-400",
+      color: pktLoss < 1 ? "text-emerald-300" : "text-rose-300",
     },
     {
       label: "Latency P95",
       value: `${p95.toFixed(1)} ms`,
-      color: p95 < 100 ? "text-blue-400" : "text-yellow-400",
+      color: p95 < 100 ? "text-stone-100" : "text-amber-300",
     },
   ];
 }
@@ -114,8 +113,8 @@ export default function StatsPanel({ port, statsUpdate }: Props) {
 
   if (!summary) {
     return (
-      <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-        <p className="text-center text-sm text-gray-500">
+      <div className="app-panel p-6">
+        <p className="text-center text-sm text-stone-500">
           Loading statistics...
         </p>
       </div>
@@ -123,20 +122,20 @@ export default function StatsPanel({ port, statsUpdate }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-      <h3 className="mb-3 text-sm font-medium text-gray-300">
+    <div className="app-panel p-5">
+      <h3 className="mb-4 text-sm font-medium text-stone-300">
         Connection Statistics
       </h3>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {cards.map((card) => (
           <div
             key={card.label}
-            className={`rounded-lg p-3 ${cardBg(card.color)}`}
+            className={`rounded-2xl border border-stone-800/80 p-4 ${cardBg(card.color)}`}
           >
             <div className={`text-2xl font-bold ${card.color}`}>
               {card.value}
             </div>
-            <div className="mt-1 text-xs text-gray-400">{card.label}</div>
+            <div className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">{card.label}</div>
           </div>
         ))}
       </div>

@@ -142,41 +142,40 @@ async fn run_speedtest_cli() -> Result<SpeedTestOutput, String> {
 
 pub struct SpeedTestManager {
     last_test_time: tokio::sync::Mutex<Option<Instant>>,
-    cooldown_s: u64,
     is_running: Arc<AtomicBool>,
 }
 
 impl SpeedTestManager {
-    pub fn new(cooldown_s: u64) -> Self {
+    pub fn new() -> Self {
         Self {
             last_test_time: tokio::sync::Mutex::new(None),
-            cooldown_s,
             is_running: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Check if a speed test can be started (cooldown elapsed and not already running).
-    pub async fn can_run(&self) -> bool {
+    pub async fn can_run(&self, cooldown_s: u64) -> bool {
         if self.is_running.load(Ordering::SeqCst) {
             return false;
         }
         let last = self.last_test_time.lock().await;
         match *last {
-            Some(t) => t.elapsed() >= Duration::from_secs(self.cooldown_s),
+            Some(t) => t.elapsed() >= Duration::from_secs(cooldown_s),
             None => true,
         }
     }
 
     /// Trigger a speed test, insert the result into the DB, and broadcast SSE events.
-    /// Returns the inserted test row ID.
+    /// Returns the inserted test row.
     pub async fn trigger_test(
         &self,
         pool: &SqlitePool,
         broadcaster: &SseBroadcaster,
+        cooldown_s: u64,
         trigger_type: &str,
         outage_id: Option<i64>,
-    ) -> Result<i64, String> {
-        if !self.can_run().await {
+    ) -> Result<SpeedTest, String> {
+        if !self.can_run(cooldown_s).await {
             return Err("Speed test on cooldown or already running".to_string());
         }
 
@@ -236,7 +235,10 @@ impl SpeedTestManager {
             trigger: test.trigger_type.clone(),
         });
 
-        Ok(test_id)
+        Ok(SpeedTest {
+            id: Some(test_id),
+            ..test
+        })
     }
 }
 
@@ -248,31 +250,26 @@ pub async fn start_scheduled_speed_test_loop(
     pool: Arc<SqlitePool>,
     broadcaster: SseBroadcaster,
     config: Arc<RwLock<Config>>,
+    manager: Arc<SpeedTestManager>,
 ) {
-    // Read initial config for cooldown and schedule interval
-    let cooldown_s = {
-        let cfg = config.read().await;
-        cfg.speed_test_cooldown_s as u64
-    };
-
-    let manager = SpeedTestManager::new(cooldown_s);
-
     loop {
-        // Re-read schedule interval each iteration in case config changed
-        let schedule_s = {
+        let (schedule_s, cooldown_s) = {
             let cfg = config.read().await;
-            cfg.speed_test_schedule_s as u64
+            (
+                cfg.speed_test_schedule_s as u64,
+                cfg.speed_test_cooldown_s as u64,
+            )
         };
 
         tokio::time::sleep(Duration::from_secs(schedule_s)).await;
 
-        if !manager.can_run().await {
+        if !manager.can_run(cooldown_s).await {
             warn!("Scheduled speed test skipped — cooldown active or test already running");
             continue;
         }
 
         if let Err(e) = manager
-            .trigger_test(&pool, &broadcaster, "scheduled", None)
+            .trigger_test(&pool, &broadcaster, cooldown_s, "scheduled", None)
             .await
         {
             error!("Scheduled speed test failed: {e}");

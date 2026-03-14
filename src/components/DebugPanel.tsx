@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { SSEState } from "../hooks/useSSE";
+import { getApiBaseUrl } from "../api";
 
 interface DebugPanelProps {
   port: number | null;
@@ -30,7 +31,7 @@ export default function DebugPanel({ port, sse }: DebugPanelProps) {
         const entry: LogEntry = {
           time: now,
           type: "ping_result",
-          data: `${target}: ${ping.success ? `${ping.latency_ms?.toFixed(1)}ms` : `FAIL ${ping.error}`}`,
+          data: `${target}: ${ping.success ? `${ping.latency_ms?.toFixed(1)}ms` : "FAIL"}`,
         };
         return [...prev.slice(-200), entry];
       });
@@ -53,7 +54,7 @@ export default function DebugPanel({ port, sse }: DebugPanelProps) {
   // Raw SSE listener for debugging
   useEffect(() => {
     if (!port) return;
-    const es = new EventSource(`http://localhost:${port}/api/events`);
+    const es = new EventSource(`${getApiBaseUrl(port)}/api/events`);
 
     const handler = (e: MessageEvent) => {
       const now = new Date().toLocaleTimeString();
@@ -89,7 +90,7 @@ export default function DebugPanel({ port, sse }: DebugPanelProps) {
   const callApi = async () => {
     if (!port) return;
     try {
-      const res = await fetch(`http://localhost:${port}${apiEndpoint}`);
+      const res = await fetch(`${getApiBaseUrl(port)}${apiEndpoint}`);
       const text = await res.text();
       try {
         setApiResponse(JSON.stringify(JSON.parse(text), null, 2));
@@ -104,42 +105,42 @@ export default function DebugPanel({ port, sse }: DebugPanelProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* SSE State Summary */}
-      <div className="rounded border border-gray-700 bg-gray-900 p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-400">SSE State</h3>
+      <div className="app-panel p-4">
+        <h3 className="mb-2 text-sm font-semibold text-stone-400">SSE State</h3>
         <div className="grid grid-cols-2 gap-2 text-xs font-mono">
           <div>
             Connected:{" "}
-            <span className={sse.connected ? "text-green-400" : "text-red-400"}>
+            <span className={sse.connected ? "text-emerald-300" : "text-rose-300"}>
               {String(sse.connected)}
             </span>
           </div>
           <div>
             Status:{" "}
-            <span className={sse.status === "up" ? "text-green-400" : sse.status === "down" ? "text-red-400" : "text-yellow-400"}>
+            <span className={sse.status === "up" ? "text-emerald-300" : sse.status === "down" ? "text-rose-300" : "text-amber-300"}>
               {sse.status}
             </span>
           </div>
-          <div>Port: <span className="text-blue-400">{port ?? "null"}</span></div>
-          <div>Active Targets: <span className="text-blue-400">{sse.lastPings.size}</span></div>
-          <div>Ping History: <span className="text-blue-400">{sse.pingHistory.length}</span></div>
-          <div>Outage Ranges: <span className="text-blue-400">{sse.outageRanges.length}</span></div>
-          <div>Active Outage: <span className="text-blue-400">{sse.activeOutage ? "YES" : "none"}</span></div>
-          <div>Speed Test Running: <span className="text-blue-400">{String(sse.speedTestRunning)}</span></div>
-          <div>Stats Update: <span className="text-blue-400">{sse.statsUpdate ? "received" : "none"}</span></div>
+          <div>Port: <span className="text-stone-200">{port ?? "null"}</span></div>
+          <div>Active Targets: <span className="text-stone-200">{sse.lastPings.size}</span></div>
+          <div>Ping History: <span className="text-stone-200">{sse.pingHistory.length}</span></div>
+          <div>Outage Ranges: <span className="text-stone-200">{sse.outageRanges.length}</span></div>
+          <div>Active Outage: <span className="text-stone-200">{sse.activeOutage ? "YES" : "none"}</span></div>
+          <div>Speed Test Running: <span className="text-stone-200">{String(sse.speedTestRunning)}</span></div>
+          <div>Stats Update: <span className="text-stone-200">{sse.statsUpdate ? "received" : "none"}</span></div>
         </div>
       </div>
 
       {/* Raw SSE Events */}
-      <div className="rounded border border-gray-700 bg-gray-900 p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-400">
+      <div className="app-panel p-4">
+        <h3 className="mb-2 text-sm font-semibold text-stone-400">
           Raw SSE Events ({sseRaw.length})
         </h3>
         <div
           ref={logRef}
-          className="h-48 overflow-y-auto rounded bg-black p-2 text-xs font-mono text-green-400"
+          className="h-48 overflow-y-auto rounded-2xl border border-stone-800 bg-stone-950 p-3 text-xs font-mono text-stone-300"
         >
           {sseRaw.length === 0 ? (
-            <div className="text-gray-600">Waiting for events...</div>
+            <div className="text-stone-600">Waiting for events...</div>
           ) : (
             sseRaw.map((line, i) => <div key={i}>{line}</div>)
           )}
@@ -147,13 +148,13 @@ export default function DebugPanel({ port, sse }: DebugPanelProps) {
       </div>
 
       {/* API Tester */}
-      <div className="rounded border border-gray-700 bg-gray-900 p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-400">API Tester</h3>
+      <div className="app-panel p-4">
+        <h3 className="mb-2 text-sm font-semibold text-stone-400">API Tester</h3>
         <div className="flex gap-2">
           <select
             value={apiEndpoint}
             onChange={(e) => setApiEndpoint(e.target.value)}
-            className="rounded bg-gray-800 px-2 py-1 text-sm text-gray-200"
+            className="app-input"
           >
             <option value="/api/status">GET /api/status</option>
             <option value="/api/pings?limit=5">GET /api/pings?limit=5</option>
@@ -166,13 +167,13 @@ export default function DebugPanel({ port, sse }: DebugPanelProps) {
           </select>
           <button
             onClick={callApi}
-            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium hover:bg-blue-500"
+            className="app-button-primary px-3 py-1"
           >
             Send
           </button>
         </div>
         {apiResponse && (
-          <pre className="mt-2 max-h-64 overflow-auto rounded bg-black p-2 text-xs font-mono text-gray-300">
+          <pre className="mt-2 max-h-64 overflow-auto rounded-2xl border border-stone-800 bg-stone-950 p-3 text-xs font-mono text-stone-300">
             {apiResponse}
           </pre>
         )}

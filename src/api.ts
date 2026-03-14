@@ -8,8 +8,27 @@ export async function getApiPort(): Promise<number> {
   return cachedPort;
 }
 
-function baseUrl(port: number): string {
-  return `http://localhost:${port}`;
+export function getApiBaseUrl(port: number): string {
+  return `http://127.0.0.1:${port}`;
+}
+
+export async function waitForApi(port: number, timeoutMs = 10000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${getApiBaseUrl(port)}/api/health`);
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      // Retry until the API server is ready.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  throw new Error("Timed out waiting for the embedded API server");
 }
 
 export interface PingRecord {
@@ -91,7 +110,7 @@ export interface SpeedTestResult {
   download_mbps: number;
   upload_mbps: number;
   ping_ms: number;
-  server_name: string;
+  server_name: string | null;
   trigger: string;
 }
 
@@ -116,7 +135,7 @@ function buildQuery(params: object): string {
 }
 
 export async function fetchStatus(port: number): Promise<StatusResponse> {
-  const res = await fetch(`${baseUrl(port)}/api/status`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/status`);
   return res.json();
 }
 
@@ -125,7 +144,7 @@ export async function fetchPings(
   params?: PingParams,
 ): Promise<{ pings: PingRecord[]; total: number }> {
   const q = buildQuery(params ?? {});
-  const res = await fetch(`${baseUrl(port)}/api/pings${q}`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/pings${q}`);
   return res.json();
 }
 
@@ -134,7 +153,7 @@ export async function fetchOutages(
   params?: OutageParams,
 ): Promise<{ outages: Outage[] }> {
   const q = buildQuery(params ?? {});
-  const res = await fetch(`${baseUrl(port)}/api/outages${q}`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/outages${q}`);
   return res.json();
 }
 
@@ -143,17 +162,17 @@ export async function fetchStats(
   window?: number,
 ): Promise<RollingStats[]> {
   const q = window !== undefined ? `?window=${window}` : "";
-  const res = await fetch(`${baseUrl(port)}/api/stats${q}`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/stats${q}`);
   return res.json();
 }
 
 export async function fetchStatsSummary(port: number): Promise<RollingStats> {
-  const res = await fetch(`${baseUrl(port)}/api/stats/summary`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/stats/summary`);
   return res.json();
 }
 
 export async function fetchConfig(port: number): Promise<Config> {
-  const res = await fetch(`${baseUrl(port)}/api/config`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/config`);
   return res.json();
 }
 
@@ -161,7 +180,7 @@ export async function updateConfig(
   port: number,
   config: Partial<Config>,
 ): Promise<Config> {
-  const res = await fetch(`${baseUrl(port)}/api/config`, {
+  const res = await fetch(`${getApiBaseUrl(port)}/api/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
@@ -172,23 +191,31 @@ export async function updateConfig(
 export async function fetchSpeedTests(
   port: number,
 ): Promise<{ tests: SpeedTestResult[] }> {
-  const res = await fetch(`${baseUrl(port)}/api/speed-tests`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/speed-tests`);
   return res.json();
 }
 
 export async function triggerSpeedTest(
   port: number,
 ): Promise<SpeedTestResult> {
-  const res = await fetch(`${baseUrl(port)}/api/speed-tests/run`, {
+  const res = await fetch(`${getApiBaseUrl(port)}/api/speed-tests/run`, {
     method: "POST",
   });
-  return res.json();
+  const body = await res.json();
+
+  if (!res.ok) {
+    const message =
+      typeof body?.error === "string" ? body.error : "Failed to run speed test";
+    throw new Error(message);
+  }
+
+  return body;
 }
 
 export async function fetchStatsSummaryFull(
   port: number,
 ): Promise<StatsSummary> {
-  const res = await fetch(`${baseUrl(port)}/api/stats/summary`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/stats/summary`);
   return res.json();
 }
 
@@ -203,7 +230,7 @@ export async function fetchHeatmap(
   port: number,
   days: number,
 ): Promise<{ cells: HeatmapCell[] }> {
-  const res = await fetch(`${baseUrl(port)}/api/heatmap?days=${days}`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/heatmap?days=${days}`);
   return res.json();
 }
 
@@ -213,7 +240,7 @@ export async function exportCsv(
   to: string,
 ): Promise<void> {
   const q = buildQuery({ from, to });
-  const res = await fetch(`${baseUrl(port)}/api/export/csv${q}`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/export/csv${q}`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -231,7 +258,7 @@ export async function exportReport(
   to: string,
 ): Promise<void> {
   const q = buildQuery({ from, to });
-  const res = await fetch(`${baseUrl(port)}/api/export/report${q}`);
+  const res = await fetch(`${getApiBaseUrl(port)}/api/export/report${q}`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
