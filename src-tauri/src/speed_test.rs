@@ -1,8 +1,16 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
+#[cfg(target_os = "windows")]
+use std::io::{Cursor, Read, Write};
 
 use chrono::Utc;
+#[cfg(target_os = "windows")]
+use reqwest::header::USER_AGENT;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::RwLock;
@@ -65,20 +73,41 @@ struct SpeedTestCliServer {
 
 /// Run the speedtest CLI and parse its JSON output.
 /// Tries Ookla `speedtest` first, falls back to Python `speedtest-cli`.
-pub async fn run_speed_test() -> Result<SpeedTestOutput, String> {
-    // Try Ookla speedtest first
-    if let Ok(result) = run_ookla_speedtest().await {
-        return Ok(result);
+pub async fn run_speed_test(_app_data_dir: &Path) -> Result<SpeedTestOutput, String> {
+    let mut errors = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    match ensure_windows_ookla_speedtest(_app_data_dir).await {
+        Ok(path) => match run_ookla_speedtest(path.as_os_str()).await {
+            Ok(result) => return Ok(result),
+            Err(error) => errors.push(format!("Bundled Ookla speedtest failed: {error}")),
+        },
+        Err(error) => {
+            warn!("Bundled Windows speedtest helper unavailable, falling back: {error}");
+            errors.push(format!("Bundled Ookla speedtest unavailable: {error}"));
+        }
+    }
+
+    // Try Ookla speedtest on PATH first
+    match run_ookla_speedtest("speedtest").await {
+        Ok(result) => return Ok(result),
+        Err(error) => errors.push(format!("PATH speedtest failed: {error}")),
     }
 
     // Fall back to speedtest-cli (Python)
-    run_speedtest_cli().await
+    match run_speedtest_cli("speedtest-cli").await {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            errors.push(format!("PATH speedtest-cli failed: {error}"));
+            Err(errors.join(" | "))
+        }
+    }
 }
 
-async fn run_ookla_speedtest() -> Result<SpeedTestOutput, String> {
+async fn run_ookla_speedtest(command: impl AsRef<OsStr>) -> Result<SpeedTestOutput, String> {
     let output = tokio::time::timeout(
         Duration::from_secs(120),
-        tokio::process::Command::new("speedtest")
+        tokio::process::Command::new(command)
             .args(["--format=json", "--accept-license", "--accept-gdpr"])
             .output(),
     )
@@ -104,10 +133,10 @@ async fn run_ookla_speedtest() -> Result<SpeedTestOutput, String> {
     })
 }
 
-async fn run_speedtest_cli() -> Result<SpeedTestOutput, String> {
+async fn run_speedtest_cli(command: impl AsRef<OsStr>) -> Result<SpeedTestOutput, String> {
     let output = tokio::time::timeout(
         Duration::from_secs(120),
-        tokio::process::Command::new("speedtest-cli")
+        tokio::process::Command::new(command)
             .args(["--json"])
             .output(),
     )
@@ -137,6 +166,86 @@ async fn run_speedtest_cli() -> Result<SpeedTestOutput, String> {
     })
 }
 
+#[cfg(target_os = "windows")]
+const WINDOWS_OOKLA_SPEEDTEST_URL: &str =
+    "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip";
+
+#[cfg(target_os = "windows")]
+async fn ensure_windows_ookla_speedtest(app_data_dir: &Path) -> Result<PathBuf, String> {
+    let install_dir = app_data_dir.join("tools").join("ookla-speedtest");
+    let exe_path = install_dir.join("speedtest.exe");
+
+    if exe_path.exists() {
+        return Ok(exe_path);
+    }
+
+    info!(
+        "speedtest.exe not found; downloading Ookla CLI to {}",
+        exe_path.display()
+    );
+
+    let client = reqwest::Client::new();
+    let response = tokio::time::timeout(
+        Duration::from_secs(60),
+        client
+            .get(WINDOWS_OOKLA_SPEEDTEST_URL)
+            .header(USER_AGENT, "Doberman/0.1.0"),
+    )
+    .await
+    .map_err(|_| "Timed out downloading Ookla speedtest CLI".to_string())?
+    .send()
+    .await
+    .map_err(|e| format!("Failed to download Ookla speedtest CLI: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to download Ookla speedtest CLI: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let archive = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read Ookla speedtest CLI download: {e}"))?;
+
+    let install_dir_for_extract = install_dir.clone();
+    let exe_path_for_extract = exe_path.clone();
+    tokio::task::spawn_blocking(move || {
+        std::fs::create_dir_all(&install_dir_for_extract)
+            .map_err(|e| format!("Failed to create speed test install directory: {e}"))?;
+
+        let mut zip = zip::ZipArchive::new(Cursor::new(archive))
+            .map_err(|e| format!("Failed to open Ookla speedtest archive: {e}"))?;
+
+        let mut entry = zip
+            .by_name("speedtest.exe")
+            .map_err(|e| format!("Ookla speedtest archive did not contain speedtest.exe: {e}"))?;
+
+        let temp_path = exe_path_for_extract.with_extension("exe.download");
+        let mut output = std::fs::File::create(&temp_path)
+            .map_err(|e| format!("Failed to create speedtest.exe temp file: {e}"))?;
+
+        let mut buffer = Vec::new();
+        entry
+            .read_to_end(&mut buffer)
+            .map_err(|e| format!("Failed to extract speedtest.exe: {e}"))?;
+        output
+            .write_all(&buffer)
+            .map_err(|e| format!("Failed to write speedtest.exe: {e}"))?;
+        output
+            .flush()
+            .map_err(|e| format!("Failed to flush speedtest.exe: {e}"))?;
+
+        std::fs::rename(&temp_path, &exe_path_for_extract)
+            .map_err(|e| format!("Failed to finalize speedtest.exe: {e}"))?;
+
+        Ok::<_, String>(exe_path_for_extract)
+    })
+    .await
+    .map_err(|e| format!("Failed to finish speedtest.exe install task: {e}"))?
+}
+
 // ---------------------------------------------------------------------------
 // SpeedTestManager
 // ---------------------------------------------------------------------------
@@ -144,13 +253,15 @@ async fn run_speedtest_cli() -> Result<SpeedTestOutput, String> {
 pub struct SpeedTestManager {
     last_test_time: tokio::sync::Mutex<Option<Instant>>,
     is_running: Arc<AtomicBool>,
+    app_data_dir: PathBuf,
 }
 
 impl SpeedTestManager {
-    pub fn new() -> Self {
+    pub fn new(app_data_dir: PathBuf) -> Self {
         Self {
             last_test_time: tokio::sync::Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
+            app_data_dir,
         }
     }
 
@@ -198,7 +309,7 @@ impl SpeedTestManager {
 
         info!("Starting speed test (trigger: {trigger_type})");
 
-        let result = run_speed_test().await;
+        let result = run_speed_test(&self.app_data_dir).await;
 
         // Always clear the running flag and update last_test_time
         self.is_running.store(false, Ordering::SeqCst);

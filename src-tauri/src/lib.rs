@@ -62,7 +62,7 @@ pub fn run() {
                 tauri::async_runtime::block_on(async { db::get_config(&pool).await })
                     .expect("failed to load initial config");
             let config = Arc::new(RwLock::new(initial_config));
-            let speed_test_manager = Arc::new(speed_test::SpeedTestManager::new());
+            let speed_test_manager = Arc::new(speed_test::SpeedTestManager::new(app_data_dir));
 
             // Spawn the ping loop
             {
