@@ -189,12 +189,11 @@ async fn ensure_windows_ookla_speedtest(app_data_dir: &Path) -> Result<PathBuf, 
         Duration::from_secs(60),
         client
             .get(WINDOWS_OOKLA_SPEEDTEST_URL)
-            .header(USER_AGENT, "Doberman/0.1.0"),
+            .header(USER_AGENT, "Doberman/0.1.0")
+            .send(),
     )
     .await
     .map_err(|_| "Timed out downloading Ookla speedtest CLI".to_string())?
-    .send()
-    .await
     .map_err(|e| format!("Failed to download Ookla speedtest CLI: {e}"))?;
 
     if !response.status().is_success() {
