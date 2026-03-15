@@ -17,6 +17,9 @@ use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::{error, info, warn};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use crate::db::{self, Config, SpeedTest};
 use crate::sse::{SseBroadcaster, SseEvent};
 
@@ -105,11 +108,13 @@ pub async fn run_speed_test(_app_data_dir: &Path) -> Result<SpeedTestOutput, Str
 }
 
 async fn run_ookla_speedtest(command: impl AsRef<OsStr>) -> Result<SpeedTestOutput, String> {
+    let mut process = tokio::process::Command::new(command);
+    process.args(["--format=json", "--accept-license", "--accept-gdpr"]);
+    hide_child_console_window(&mut process);
+
     let output = tokio::time::timeout(
         Duration::from_secs(120),
-        tokio::process::Command::new(command)
-            .args(["--format=json", "--accept-license", "--accept-gdpr"])
-            .output(),
+        process.output(),
     )
     .await
     .map_err(|_| "Timed out".to_string())?
@@ -134,11 +139,13 @@ async fn run_ookla_speedtest(command: impl AsRef<OsStr>) -> Result<SpeedTestOutp
 }
 
 async fn run_speedtest_cli(command: impl AsRef<OsStr>) -> Result<SpeedTestOutput, String> {
+    let mut process = tokio::process::Command::new(command);
+    process.args(["--json"]);
+    hide_child_console_window(&mut process);
+
     let output = tokio::time::timeout(
         Duration::from_secs(120),
-        tokio::process::Command::new(command)
-            .args(["--json"])
-            .output(),
+        process.output(),
     )
     .await
     .map_err(|_| "Speed test timed out after 120 seconds".to_string())?
@@ -165,6 +172,15 @@ async fn run_speedtest_cli(command: impl AsRef<OsStr>) -> Result<SpeedTestOutput
         server_name,
     })
 }
+
+#[cfg(target_os = "windows")]
+fn hide_child_console_window(command: &mut tokio::process::Command) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hide_child_console_window(_command: &mut tokio::process::Command) {}
 
 #[cfg(target_os = "windows")]
 const WINDOWS_OOKLA_SPEEDTEST_URL: &str =
